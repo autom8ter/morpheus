@@ -7,30 +7,42 @@ import (
 
 func NewGraph() api.Graph {
 	nodes := map[string]map[string]api.Node{}
+	nodeRelationships := map[string]map[string]map[api.Direction]map[string]map[string]api.Relationship{}
 	return api.NewGraph(
-		func(typee string, id string) (api.Node, error) {
-			if nodes[typee] == nil {
+		func(nodeType string, nodeID string) (api.Node, error) {
+			if nodes[nodeType] == nil {
 				return nil, fmt.Errorf("not found")
 			}
-			return nodes[typee][id], nil
+			return nodes[nodeType][nodeID], nil
 		},
-		func(typee string, id string, properties map[string]interface{}) (api.Node, error) {
-			if nodes[typee] == nil {
-				nodes[typee] = map[string]api.Node{}
+		func(nodeType string, nodeID string, properties map[string]interface{}) (api.Node, error) {
+			if nodes[nodeType] == nil {
+				nodes[nodeType] = map[string]api.Node{}
 			}
-			nodeRelationships := map[api.Direction]map[string]map[string]api.Relationship{}
+			if nodeRelationships[nodeType] == nil {
+				nodeRelationships[nodeType] = map[string]map[api.Direction]map[string]map[string]api.Relationship{}
+			}
+			if nodeRelationships[nodeType][nodeID] == nil {
+				nodeRelationships[nodeType][nodeID] = map[api.Direction]map[string]map[string]api.Relationship{}
+			}
+			if nodeRelationships[nodeType][nodeID][api.Outgoing] == nil {
+				nodeRelationships[nodeType][nodeID][api.Outgoing] = map[string]map[string]api.Relationship{}
+			}
+			if nodeRelationships[nodeType][nodeID][api.Incoming] == nil {
+				nodeRelationships[nodeType][nodeID][api.Incoming] = map[string]map[string]api.Relationship{}
+			}
 			if properties == nil {
 				properties = map[string]interface{}{}
 			}
-			nodeEntity := NewEntity(typee, id, properties)
+			nodeEntity := NewEntity(nodeType, nodeID, properties)
 			node := api.NewNode(
 				nodeEntity,
-				func(direction api.Direction, relation, id string, node api.Node) api.Relationship {
+				func(direction api.Direction, relation, relationshipID string, node api.Node) api.Relationship {
 					relationship := api.NewRelationship(
-						NewEntity(relation, id, map[string]interface{}{}),
+						NewEntity(relation, relationshipID, map[string]interface{}{}),
 						func() api.Node {
 							if direction == api.Outgoing {
-								return nodes[typee][id]
+								return nodes[nodeType][nodeID]
 							}
 							return node
 						},
@@ -38,50 +50,72 @@ func NewGraph() api.Graph {
 							if direction == api.Outgoing {
 								return node
 							}
-							return nodes[typee][id]
+							return nodes[nodeType][nodeID]
 						},
 					)
-					if nodeRelationships[direction] == nil {
-						nodeRelationships[direction] = map[string]map[string]api.Relationship{}
+					if nodeRelationships[nodeType][nodeID][direction][relation] == nil {
+						nodeRelationships[nodeType][nodeID][direction][relation] = map[string]api.Relationship{}
 					}
-					if nodeRelationships[direction][relation] == nil {
-						nodeRelationships[direction][relation] = map[string]api.Relationship{}
+
+					nodeRelationships[nodeType][nodeID][direction][relation][relationshipID] = relationship
+
+					if direction == api.Outgoing {
+						if nodeRelationships[node.Type()][node.ID()][api.Incoming][relation] == nil {
+							nodeRelationships[node.Type()][node.ID()][api.Incoming][relation] = map[string]api.Relationship{}
+						}
+						nodeRelationships[node.Type()][node.ID()][api.Incoming][relation][relationshipID] = relationship.Reverse()
+					} else {
+						if nodeRelationships[node.Type()][node.ID()][api.Outgoing][relation] == nil {
+							nodeRelationships[node.Type()][node.ID()][api.Outgoing][relation] = map[string]api.Relationship{}
+						}
+						nodeRelationships[node.Type()][node.ID()][api.Outgoing][relation][relationshipID] = relationship.Reverse()
 					}
-					nodeRelationships[direction][relation][id] = relationship
 					return relationship
 				},
 				func(direction api.Direction, relationship, id string) {
-					if nodeRelationships[direction] == nil {
+					if nodeRelationships[nodeType] == nil {
 						return
 					}
-					if nodeRelationships[direction][relationship] == nil {
+					if nodeRelationships[nodeType][nodeID] == nil {
 						return
 					}
-					delete(nodeRelationships[direction][relationship], id)
+					if nodeRelationships[nodeType][nodeID][direction] == nil {
+						return
+					}
+					if nodeRelationships[nodeType][nodeID][direction][relationship] == nil {
+						return
+					}
+					delete(nodeRelationships[nodeType][nodeID][direction][relationship], id)
 				},
-				func(direction api.Direction, typee string, fn func(node api.Relationship) bool) {
-					if nodeRelationships[direction] == nil {
+				func(direction api.Direction, relation string, fn func(node api.Relationship) bool) {
+					if nodeRelationships[nodeType] == nil {
 						return
 					}
-					if nodeRelationships[direction][typee] == nil {
+					if nodeRelationships[nodeType][nodeID] == nil {
 						return
 					}
-					for _, rel := range nodeRelationships[direction][typee] {
+					if nodeRelationships[nodeType][nodeID][direction] == nil {
+						return
+					}
+					if nodeRelationships[nodeType][nodeID][direction][relation] == nil {
+						return
+					}
+					for _, rel := range nodeRelationships[nodeType][nodeID][direction][relation] {
 						if !fn(rel) {
 							break
 						}
 					}
 				},
 			)
-			nodes[typee][id] = node
+			nodes[nodeType][nodeID] = node
 			return node, nil
 		},
-		func(typee string, id string) error {
-			delete(nodes[typee], id)
+		func(nodeType string, id string) error {
+			delete(nodes[nodeType], id)
 			return nil
 		},
-		func(typee string, fn func(node api.Node) bool) error {
-			for _, n := range nodes[typee] {
+		func(nodeType string, fn func(node api.Node) bool) error {
+			for _, n := range nodes[nodeType] {
 				if !fn(n) {
 					return nil
 				}

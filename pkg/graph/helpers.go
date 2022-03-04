@@ -21,6 +21,9 @@ func eval(exp *model.Expression, ent api.Entity) bool {
 }
 
 func toNode(n api.Node) *model.Node {
+	if n == nil {
+		return &model.Node{}
+	}
 	return &model.Node{
 		ID:   n.ID(),
 		Type: n.Type(),

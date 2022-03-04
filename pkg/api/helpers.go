@@ -65,6 +65,14 @@ func (i iRelationship) Target() Node {
 	return i.getTarget()
 }
 
+func (i iRelationship) Reverse() Relationship {
+	return iRelationship{
+		Entity:    i.Entity,
+		getSource: i.getTarget,
+		getTarget: i.getSource,
+	}
+}
+
 type iNode struct {
 	Entity
 	addRel        func(direction Direction, relationship string, id string, node Node) Relationship

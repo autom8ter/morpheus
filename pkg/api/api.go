@@ -28,6 +28,7 @@ type Relationship interface {
 	Entity
 	Source() Node
 	Target() Node
+	Reverse() Relationship
 }
 
 type Graph interface {
