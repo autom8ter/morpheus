@@ -32,7 +32,7 @@ type Node struct {
 	Type               string                 `json:"type"`
 	Properties         map[string]interface{} `json:"properties"`
 	GetProperty        interface{}            `json:"getProperty"`
-	SetProperty        bool                   `json:"setProperty"`
+	SetProperties      bool                   `json:"setProperties"`
 	DelProperty        bool                   `json:"delProperty"`
 	AddRelationship    *Relationship          `json:"addRelationship"`
 	RemoveRelationship bool                   `json:"removeRelationship"`
@@ -42,14 +42,14 @@ type Node struct {
 func (Node) IsEntity() {}
 
 type Relationship struct {
-	ID          string                 `json:"id"`
-	Type        string                 `json:"type"`
-	Properties  map[string]interface{} `json:"properties"`
-	GetProperty interface{}            `json:"getProperty"`
-	SetProperty bool                   `json:"setProperty"`
-	DelProperty bool                   `json:"delProperty"`
-	Source      *Node                  `json:"source"`
-	Target      *Node                  `json:"target"`
+	ID            string                 `json:"id"`
+	Type          string                 `json:"type"`
+	Properties    map[string]interface{} `json:"properties"`
+	GetProperty   interface{}            `json:"getProperty"`
+	SetProperties bool                   `json:"setProperties"`
+	DelProperty   bool                   `json:"delProperty"`
+	Source        *Node                  `json:"source"`
+	Target        *Node                  `json:"target"`
 }
 
 func (Relationship) IsEntity() {}

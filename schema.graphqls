@@ -27,7 +27,7 @@ interface Entity {
   type: String!
   properties(input: String): Map!
   getProperty(key: String!): Any
-  setProperty(key: String!, value: Any!): Boolean!
+  setProperties(properties: Map!): Boolean!
   delProperty(key: String!): Boolean!
 }
 
@@ -36,11 +36,11 @@ type Node implements Entity {
   type: String!
   properties(input: String): Map!
   getProperty(key: String!): Any
-  setProperty(key: String!, value: Any!): Boolean!
+  setProperties(properties: Map!): Boolean!
   delProperty(key: String!): Boolean!
   addRelationship(direction: Direction!, relationship: String!, nodeKey: Key!): Relationship!
   removeRelationship(direction: Direction!, key: Key!): Boolean!
-  relationships(filter: Filter): [Relationship!]
+  relationships(direction: Direction!, type: String!, filter: Filter): [Relationship!]
 }
 
 type Relationship implements Entity {
@@ -48,7 +48,7 @@ type Relationship implements Entity {
   type: String!
   properties(input: String): Map!
   getProperty(key: String!): Any
-  setProperty(key: String!, value: Any!): Boolean!
+  setProperties(properties: Map!): Boolean!
   delProperty(key: String!): Boolean!
   source: Node!
   target: Node!
@@ -58,7 +58,7 @@ type Relationship implements Entity {
 type Query {
   nodeTypes: [String!]
   getNode(key: Key!): Node!
-  getNodes(filter: Filter!): [Node!]
+  getNodes(type: String!, filter: Filter!): [Node!]
   size: Int!
 }
 

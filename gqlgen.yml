@@ -54,3 +54,27 @@ models:
       - github.com/99designs/gqlgen/graphql.Int
       - github.com/99designs/gqlgen/graphql.Int64
       - github.com/99designs/gqlgen/graphql.Int32
+  Node:
+    fields:
+      properties:
+        resolver: true
+      getProperty:
+        resolver: true
+      setProperties:
+        resolver: true
+      addRelationship:
+        resolver: true
+      delRelationship:
+        resolver: true
+      relationships:
+        resolver: true
+  Relationship:
+    fields:
+      properties:
+        resolver: true
+      getProperty:
+        resolver: true
+      setProperties:
+        resolver: true
+
+
