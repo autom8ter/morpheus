@@ -1,0 +1,2 @@
+generate:
+	@gqlgen generate

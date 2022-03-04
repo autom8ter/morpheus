@@ -1,0 +1,68 @@
+scalar Map
+
+scalar Any
+
+input Key {
+  type: String!
+  id: String!
+}
+
+input Expression {
+  key: String!
+  operator: String!
+  value: Any!
+}
+
+input Filter {
+  expressions: [Expression!]
+}
+
+enum Direction {
+  OUTGOING
+  INCOMING
+}
+
+interface Entity {
+  id: String!
+  type: String!
+  properties(input: String): Map!
+  getProperty(key: String!): Any
+  setProperty(key: String!, value: Any!): Boolean!
+  delProperty(key: String!): Boolean!
+}
+
+type Node implements Entity {
+  id: String!
+  type: String!
+  properties(input: String): Map!
+  getProperty(key: String!): Any
+  setProperty(key: String!, value: Any!): Boolean!
+  delProperty(key: String!): Boolean!
+  addRelationship(direction: Direction!, relationship: String!, nodeKey: Key!): Relationship!
+  removeRelationship(direction: Direction!, key: Key!): Boolean!
+  relationships(filter: Filter): [Relationship!]
+}
+
+type Relationship implements Entity {
+  id: String!
+  type: String!
+  properties(input: String): Map!
+  getProperty(key: String!): Any
+  setProperty(key: String!, value: Any!): Boolean!
+  delProperty(key: String!): Boolean!
+  source: Node!
+  target: Node!
+}
+
+
+type Query {
+  nodeTypes: [String!]
+  getNode(key: Key!): Node!
+  getNodes(filter: Filter!): [Node!]
+  size: Int!
+}
+
+type Mutation {
+  addNode(type: String!, properties: Map): Node!
+  delNode(key: Key!): Boolean!
+}
