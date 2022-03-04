@@ -2,3 +2,5 @@
 *.prof
 .idea
 sample.graphql
+*.test
+*.prof

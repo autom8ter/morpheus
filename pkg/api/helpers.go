@@ -75,16 +75,22 @@ func (i iRelationship) Reverse() Relationship {
 
 type iNode struct {
 	Entity
+	getRel      func(direction Direction, relation, id string) (Relationship, bool)
 	addRel        func(direction Direction, relationship string, id string, node Node) Relationship
 	removeRel     func(direction Direction, relationship string, id string)
 	relationships func(direction Direction, typee string, fn func(relationship Relationship) bool)
 }
 
 func NewNode(entity Entity,
+	getRel func(direction Direction, relation, id string) (Relationship, bool),
 	addRel func(direction Direction, relationship string, id string, node Node) Relationship,
 	removeRel func(direction Direction, relationship string, id string),
 	relationships func(direction Direction, typee string, fn func(relationship Relationship) bool)) Node {
-	return &iNode{Entity: entity, addRel: addRel, removeRel: removeRel, relationships: relationships}
+	return &iNode{Entity: entity, getRel: getRel, addRel: addRel, removeRel: removeRel, relationships: relationships}
+}
+
+func (i iNode) GetRelationship(direction Direction, relationship, id string) (Relationship, bool) {
+	return i.getRel(direction, relationship, id)
 }
 
 func (i iNode) AddRelationship(direction Direction, relationship, id string, node Node) Relationship {
@@ -108,7 +114,7 @@ type graph struct {
 	size       func() int
 }
 
-func NewGraph(
+func newGraph(
 	getNode func(typee string, id string) (Node, error),
 	addNode func(typee string, id string, properties map[string]interface{}) (Node, error),
 	delNode func(typee string, id string) error,
@@ -140,4 +146,150 @@ func (g graph) NodeTypes() []string {
 
 func (g graph) Size() int {
 	return g.size()
+}
+
+func NewGraph(entityFunc EntityCreationFunc) Graph {
+	nodes := map[string]map[string]Node{}
+	nodeRelationships := map[string]map[string]map[Direction]map[string]map[string]Relationship{}
+	return newGraph(
+		func(nodeType string, nodeID string) (Node, error) {
+			if nodes[nodeType] == nil {
+				return nil, fmt.Errorf("not found")
+			}
+			return nodes[nodeType][nodeID], nil
+		},
+		func(nodeType string, nodeID string, properties map[string]interface{}) (Node, error) {
+			if nodes[nodeType] == nil {
+				nodes[nodeType] = map[string]Node{}
+			}
+			if nodeRelationships[nodeType] == nil {
+				nodeRelationships[nodeType] = map[string]map[Direction]map[string]map[string]Relationship{}
+			}
+			if nodeRelationships[nodeType][nodeID] == nil {
+				nodeRelationships[nodeType][nodeID] = map[Direction]map[string]map[string]Relationship{}
+			}
+			if nodeRelationships[nodeType][nodeID][Outgoing] == nil {
+				nodeRelationships[nodeType][nodeID][Outgoing] = map[string]map[string]Relationship{}
+			}
+			if nodeRelationships[nodeType][nodeID][Incoming] == nil {
+				nodeRelationships[nodeType][nodeID][Incoming] = map[string]map[string]Relationship{}
+			}
+			if properties == nil {
+				properties = map[string]interface{}{}
+			}
+			nodeEntity := entityFunc("1_", nodeType, nodeID, properties)
+			node := NewNode(
+				nodeEntity,
+				func(direction Direction, relation, id string) (Relationship, bool) {
+					if nodeRelationships[nodeType][nodeID][direction] == nil {
+						return nil, false
+					}
+					if nodeRelationships[nodeType][nodeID][direction][relation] == nil {
+						return nil, false
+					}
+					if rel, ok := nodeRelationships[nodeType][nodeID][direction][relation][id]; ok  {
+						return rel, true
+					}
+					return nil, false
+				},
+				func(direction Direction, relation, relationshipID string, node Node) Relationship {
+					relationship := NewRelationship(
+						entityFunc("2_", relation, relationshipID, map[string]interface{}{}),
+						func() Node {
+							if direction == Outgoing {
+								return nodes[nodeType][nodeID]
+							}
+							return node
+						},
+						func() Node {
+							if direction == Outgoing {
+								return node
+							}
+							return nodes[nodeType][nodeID]
+						},
+					)
+					if nodeRelationships[nodeType][nodeID][direction][relation] == nil {
+						nodeRelationships[nodeType][nodeID][direction][relation] = map[string]Relationship{}
+					}
+
+					nodeRelationships[nodeType][nodeID][direction][relation][relationshipID] = relationship
+
+					if direction == Outgoing {
+						if nodeRelationships[node.Type()][node.ID()][Incoming][relation] == nil {
+							nodeRelationships[node.Type()][node.ID()][Incoming][relation] = map[string]Relationship{}
+						}
+						nodeRelationships[node.Type()][node.ID()][Incoming][relation][relationshipID] = relationship
+					} else {
+						if nodeRelationships[node.Type()][node.ID()][Outgoing][relation] == nil {
+							nodeRelationships[node.Type()][node.ID()][Outgoing][relation] = map[string]Relationship{}
+						}
+						nodeRelationships[node.Type()][node.ID()][Outgoing][relation][relationshipID] = relationship
+					}
+					return relationship
+				},
+				func(direction Direction, relationship, id string) {
+					if nodeRelationships[nodeType] == nil {
+						return
+					}
+					if nodeRelationships[nodeType][nodeID] == nil {
+						return
+					}
+					if nodeRelationships[nodeType][nodeID][direction] == nil {
+						return
+					}
+					if nodeRelationships[nodeType][nodeID][direction][relationship] == nil {
+						return
+					}
+					delete(nodeRelationships[nodeType][nodeID][direction][relationship], id)
+				},
+				func(direction Direction, relation string, fn func(node Relationship) bool) {
+					if nodeRelationships[nodeType] == nil {
+						return
+					}
+					if nodeRelationships[nodeType][nodeID] == nil {
+						return
+					}
+					if nodeRelationships[nodeType][nodeID][direction] == nil {
+						return
+					}
+					if nodeRelationships[nodeType][nodeID][direction][relation] == nil {
+						return
+					}
+					for _, rel := range nodeRelationships[nodeType][nodeID][direction][relation] {
+						if !fn(rel) {
+							break
+						}
+					}
+				},
+			)
+			nodes[nodeType][nodeID] = node
+			return node, nil
+		},
+		func(nodeType string, id string) error {
+			delete(nodes[nodeType], id)
+			return nil
+		},
+		func(nodeType string, fn func(node Node) bool) error {
+			for _, n := range nodes[nodeType] {
+				if !fn(n) {
+					return nil
+				}
+			}
+			return nil
+		},
+		func() []string {
+			var types []string
+			for k, _ := range nodes {
+				types = append(types, k)
+			}
+			return types
+		},
+		func() int {
+			size := 0
+			for _, n := range nodes {
+				size = size + len(n)
+			}
+			return size
+		},
+	)
 }

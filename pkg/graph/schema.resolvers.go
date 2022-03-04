@@ -5,6 +5,7 @@ package graph
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/graph/generated"
@@ -50,6 +51,18 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 	}
 	n.SetProperties(properties)
 	return true, nil
+}
+
+func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, id string) (*model.Relationship, error) {
+	n, err := r.graph.GetNode(obj.Type, obj.ID)
+	if err != nil {
+		return nil, err
+	}
+	rel, ok := n.GetRelationship(api.Direction(direction), relationship, id)
+	if !ok {
+		return nil, fmt.Errorf("not found")
+	}
+	return toRelationship(rel), nil
 }
 
 func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, nodeKey model.Key) (*model.Relationship, error) {

@@ -1,13 +1,20 @@
-package inmem
+package badger
 
 import (
 	"github.com/autom8ter/morpheus/pkg/api"
+	"io/ioutil"
+	"os"
 	"reflect"
 	"testing"
 )
 
 func Test(t *testing.T) {
-	g := NewGraph()
+	dir, err := ioutil.TempDir("", "badger-test")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(dir)
+	g := NewGraph(dir)
 	coleman, err := g.AddNode("user", "colemanword@gmail.com", map[string]interface{}{
 		"name": "Coleman Word",
 	})
@@ -47,7 +54,12 @@ cpu: Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz
 Benchmark-16             3159924               373.7 ns/op            32 B/op          2 allocs/op
 */
 func Benchmark(b *testing.B) {
-	g := NewGraph()
+	dir, err := ioutil.TempDir("", "badger-test")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(dir)
+	g := NewGraph(dir)
 	coleman, err := g.AddNode("user", "colemanword@gmail.com", map[string]interface{}{
 		"name": "Coleman Word",
 	})

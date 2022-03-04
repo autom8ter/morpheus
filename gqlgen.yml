@@ -68,6 +68,8 @@ models:
         resolver: true
       relationships:
         resolver: true
+      getRelationship:
+        resolver: true
   Relationship:
     fields:
       properties:

@@ -34,6 +34,7 @@ type Node struct {
 	GetProperty        interface{}            `json:"getProperty"`
 	SetProperties      bool                   `json:"setProperties"`
 	DelProperty        bool                   `json:"delProperty"`
+	GetRelationship    *Relationship          `json:"getRelationship"`
 	AddRelationship    *Relationship          `json:"addRelationship"`
 	RemoveRelationship bool                   `json:"removeRelationship"`
 	Relationships      []*Relationship        `json:"relationships"`

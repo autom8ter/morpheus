@@ -55,6 +55,7 @@ type ComplexityRoot struct {
 		AddRelationship    func(childComplexity int, direction model.Direction, relationship string, nodeKey model.Key) int
 		DelProperty        func(childComplexity int, key string) int
 		GetProperty        func(childComplexity int, key string) int
+		GetRelationship    func(childComplexity int, direction model.Direction, relationship string, id string) int
 		ID                 func(childComplexity int) int
 		Properties         func(childComplexity int, input *string) int
 		Relationships      func(childComplexity int, direction model.Direction, typeArg string, filter *model.Filter) int
@@ -91,6 +92,7 @@ type NodeResolver interface {
 	GetProperty(ctx context.Context, obj *model.Node, key string) (interface{}, error)
 	SetProperties(ctx context.Context, obj *model.Node, properties map[string]interface{}) (bool, error)
 
+	GetRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, id string) (*model.Relationship, error)
 	AddRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, nodeKey model.Key) (*model.Relationship, error)
 
 	Relationships(ctx context.Context, obj *model.Node, direction model.Direction, typeArg string, filter *model.Filter) ([]*model.Relationship, error)
@@ -181,6 +183,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Node.GetProperty(childComplexity, args["key"].(string)), true
+
+	case "Node.getRelationship":
+		if e.complexity.Node.GetRelationship == nil {
+			break
+		}
+
+		args, err := ec.field_Node_getRelationship_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Node.GetRelationship(childComplexity, args["direction"].(model.Direction), args["relationship"].(string), args["id"].(string)), true
 
 	case "Node.id":
 		if e.complexity.Node.ID == nil {
@@ -462,6 +476,7 @@ type Node implements Entity {
   getProperty(key: String!): Any
   setProperties(properties: Map!): Boolean!
   delProperty(key: String!): Boolean!
+  getRelationship(direction: Direction!, relationship: String!, id: String!): Relationship!
   addRelationship(direction: Direction!, relationship: String!, nodeKey: Key!): Relationship!
   removeRelationship(direction: Direction!, key: Key!): Boolean!
   relationships(direction: Direction!, type: String!, filter: Filter): [Relationship!]
@@ -597,6 +612,39 @@ func (ec *executionContext) field_Node_getProperty_args(ctx context.Context, raw
 		}
 	}
 	args["key"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Node_getRelationship_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.Direction
+	if tmp, ok := rawArgs["direction"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
+		arg0, err = ec.unmarshalNDirection2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["direction"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["relationship"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relationship"))
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["relationship"] = arg1
+	var arg2 string
+	if tmp, ok := rawArgs["id"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+		arg2, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["id"] = arg2
 	return args, nil
 }
 
@@ -1156,6 +1204,48 @@ func (ec *executionContext) _Node_delProperty(ctx context.Context, field graphql
 	res := resTmp.(bool)
 	fc.Result = res
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Node_getRelationship(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Node",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Node_getRelationship_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Node().GetRelationship(rctx, obj, args["direction"].(model.Direction), args["relationship"].(string), args["id"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Relationship)
+	fc.Result = res
+	return ec.marshalNRelationship2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationship(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Node_addRelationship(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
@@ -3262,6 +3352,26 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&invalids, 1)
 			}
+		case "getRelationship":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Node_getRelationship(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
 		case "addRelationship":
 			field := field
 

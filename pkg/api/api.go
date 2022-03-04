@@ -17,10 +17,13 @@ type Entity interface {
 	DelProperty(name string)
 }
 
+type EntityCreationFunc func(prefix, nodeType, nodeID string, properties map[string]interface{}) Entity
+
 type Node interface {
 	Entity
 	AddRelationship(direction Direction, relationship string, id string, node Node) Relationship
 	RemoveRelationship(direction Direction, relationship string, id string)
+	GetRelationship(direction Direction, relation, id string) (Relationship, bool)
 	Relationships(direction Direction, typee string, fn func(relationship Relationship) bool)
 }
 
