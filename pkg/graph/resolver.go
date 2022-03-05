@@ -1,15 +1,24 @@
 package graph
 
-import "github.com/autom8ter/morpheus/pkg/api"
-
-// This file will not be regenerated automatically.
-//
-// It serves as dependency injection for your app, add any dependencies you require here.
+import (
+	"github.com/autom8ter/morpheus/pkg/api"
+	"github.com/autom8ter/morpheus/pkg/raft"
+	"net"
+)
 
 type Resolver struct {
 	graph api.Graph
+	raft  *raft.Raft
 }
 
-func NewResolver(graph api.Graph) *Resolver {
-	return &Resolver{graph: graph}
+func NewResolver(graph api.Graph, raftLis net.Listener) (*Resolver, error) {
+	r, err := raft.NewRaft(graph, raftLis)
+	if err != nil {
+		return nil, err
+	}
+	return &Resolver{graph: graph, raft: r}, nil
+}
+
+func (r *Resolver) Close() error {
+	return r.raft.Close()
 }

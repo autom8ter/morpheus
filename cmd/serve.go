@@ -9,14 +9,14 @@ import (
 	"github.com/autom8ter/morpheus/pkg/logger"
 	"github.com/autom8ter/morpheus/pkg/server"
 	"github.com/spf13/cobra"
-	"log"
+	"net"
 )
 
 var (
-	port int
+	port          int
 	introspection bool
-	logQueries bool
-	tracing bool
+	logQueries    bool
+	tracing       bool
 )
 
 // serveCmd represents the serve command
@@ -25,8 +25,22 @@ var serveCmd = &cobra.Command{
 	Short: "start server",
 	Run: func(_ *cobra.Command, _ []string) {
 		g := inmem.NewGraph()
+		rlis, err := net.Listen("tcp", "5673")
+		if err != nil {
+			logger.L.Error("failed to start raft listener", map[string]interface{}{
+				"error": err,
+			})
+			return
+		}
+		resolver, err := graph.NewResolver(g, rlis)
+		if err != nil {
+			logger.L.Error("failed to create graphql resolver", map[string]interface{}{
+				"error": err,
+			})
+			return
+		}
 		schema := generated.NewExecutableSchema(generated.Config{
-			Resolvers:  graph.NewResolver(g),
+			Resolvers:  resolver,
 			Directives: generated.DirectiveRoot{},
 			Complexity: generated.ComplexityRoot{},
 		})
@@ -39,7 +53,9 @@ var serveCmd = &cobra.Command{
 			LogQueries:    logQueries,
 			Port:          fmt.Sprintf(":%v", port),
 		}, schema); err != nil {
-			log.Printf("server failure: %s", err)
+			logger.L.Error("server failure", map[string]interface{}{
+				"error": err,
+			})
 		}
 	},
 }

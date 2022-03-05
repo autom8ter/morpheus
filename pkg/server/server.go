@@ -18,10 +18,10 @@ import (
 const defaultPort = "8080"
 
 type Opts struct {
-	Tracing bool
+	Tracing       bool
 	Introspection bool
-	LogQueries bool
-	Port string
+	LogQueries    bool
+	Port          string
 }
 
 func Serve(ctx context.Context, opts *Opts, schema graphql.ExecutableSchema) error {
@@ -43,7 +43,7 @@ func Serve(ctx context.Context, opts *Opts, schema graphql.ExecutableSchema) err
 			oc := graphql.GetOperationContext(ctx)
 			logger.L.Info("executing operation", map[string]interface{}{
 				"operation_name": oc.OperationName,
-				"raw_query": oc.RawQuery,
+				"raw_query":      oc.RawQuery,
 			})
 			return next(ctx)
 		})

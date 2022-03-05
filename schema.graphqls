@@ -42,7 +42,7 @@ type Node implements Entity {
   delProperty(key: String!): Boolean!
   getRelationship(direction: Direction!, relationship: String!, id: String!): Relationship!
   addRelationship(direction: Direction!, relationship: String!, nodeKey: Key!): Relationship!
-  removeRelationship(direction: Direction!, key: Key!): Boolean!
+  delRelationship(direction: Direction!, key: Key!): Boolean!
   relationships(direction: Direction!, type: String!, filter: Filter): [Relationship!]
 }
 

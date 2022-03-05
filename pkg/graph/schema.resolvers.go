@@ -5,7 +5,9 @@ package graph
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/autom8ter/morpheus/pkg/raft/fsm"
 
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/graph/generated"
@@ -14,15 +16,51 @@ import (
 )
 
 func (r *mutationResolver) AddNode(ctx context.Context, typeArg string, properties map[string]interface{}) (*model.Node, error) {
-	res, err := r.graph.AddNode(typeArg, uuid.New().String(), properties)
+	id := uuid.New().String()
+	cmd := &fsm.CMD{
+		Method: fsm.AddNodes,
+		AddNodes: []fsm.AddNode{
+			{
+				Type:       typeArg,
+				ID:         id,
+				Properties: properties,
+			},
+		},
+	}
+	bits, err := json.Marshal(cmd)
 	if err != nil {
 		return nil, err
 	}
-	return toNode(res), nil
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return nil, err
+	}
+	if err, ok := val.(error); ok {
+		return nil, err
+	}
+
+	return toNode(val.([]api.Node)[0]), nil
 }
 
 func (r *mutationResolver) DelNode(ctx context.Context, key model.Key) (bool, error) {
-	if err := r.graph.DelNode(key.Type, key.ID); err != nil {
+	cmd := &fsm.CMD{
+		Method: fsm.DelNodes,
+		DelNodes: []fsm.DelNode{
+			{
+				Type: key.Type,
+				ID:   key.ID,
+			},
+		},
+	}
+	bits, err := json.Marshal(cmd)
+	if err != nil {
+		return false, err
+	}
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return false, err
+	}
+	if err, ok := val.(error); ok {
 		return false, err
 	}
 	return true, nil
@@ -45,11 +83,27 @@ func (r *nodeResolver) GetProperty(ctx context.Context, obj *model.Node, key str
 }
 
 func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, properties map[string]interface{}) (bool, error) {
-	n, err := r.graph.GetNode(obj.Type, obj.ID)
+	cmd := &fsm.CMD{
+		Method: fsm.SetNodeProperties,
+		SetNodeProperties: []fsm.SetNodeProperty{
+			{
+				Type:       obj.Type,
+				ID:         obj.ID,
+				Properties: properties,
+			},
+		},
+	}
+	bits, err := json.Marshal(cmd)
 	if err != nil {
 		return false, err
 	}
-	n.SetProperties(properties)
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return false, err
+	}
+	if err, ok := val.(error); ok {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -66,16 +120,32 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, dir
 }
 
 func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, nodeKey model.Key) (*model.Relationship, error) {
-	n, err := r.graph.GetNode(obj.Type, obj.ID)
+	cmd := &fsm.CMD{
+		Method: fsm.AddRelationships,
+		AddRelationships: []fsm.AddRelationship{
+			{
+				NodeType:       obj.Type,
+				NodeID:         obj.ID,
+				Direction:      string(direction),
+				Relationship:   relationship,
+				RelationshipID: uuid.NewString(),
+				Node2Type:      nodeKey.Type,
+				Node2ID:        nodeKey.ID,
+			},
+		},
+	}
+	bits, err := json.Marshal(cmd)
 	if err != nil {
 		return nil, err
 	}
-	target, err := r.graph.GetNode(nodeKey.Type, nodeKey.ID)
+	val, err := r.raft.Apply(bits)
 	if err != nil {
 		return nil, err
 	}
-	rel := n.AddRelationship(api.Direction(direction), relationship, uuid.NewString(), target)
-	return toRelationship(rel), nil
+	if err, ok := val.(error); ok {
+		return nil, err
+	}
+	return toRelationship(val.([]api.Relationship)[0]), nil
 }
 
 func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direction model.Direction, typeArg string, filter *model.Filter) ([]*model.Relationship, error) {
@@ -146,11 +216,29 @@ func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relat
 }
 
 func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Relationship, properties map[string]interface{}) (bool, error) {
-	n, err := r.graph.GetNode(obj.Type, obj.ID)
+	cmd := &fsm.CMD{
+		Method: fsm.SetRelationshipProperties,
+		SetRelationshipProperties: []fsm.SetRelationshipProperty{
+			{
+				NodeType:       obj.Source.Type,
+				NodeID:         obj.Source.ID,
+				Relationship:   obj.Type,
+				RelationshipID: obj.ID,
+				Properties:     properties,
+			},
+		},
+	}
+	bits, err := json.Marshal(cmd)
 	if err != nil {
 		return false, err
 	}
-	n.SetProperties(properties)
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return false, err
+	}
+	if err, ok := val.(error); ok {
+		return false, err
+	}
 	return true, nil
 }
 

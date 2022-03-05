@@ -75,18 +75,18 @@ func (i iRelationship) Reverse() Relationship {
 
 type iNode struct {
 	Entity
-	getRel      func(direction Direction, relation, id string) (Relationship, bool)
+	getRel        func(direction Direction, relation, id string) (Relationship, bool)
 	addRel        func(direction Direction, relationship string, id string, node Node) Relationship
-	removeRel     func(direction Direction, relationship string, id string)
+	delRel        func(direction Direction, relationship string, id string)
 	relationships func(direction Direction, typee string, fn func(relationship Relationship) bool)
 }
 
 func NewNode(entity Entity,
 	getRel func(direction Direction, relation, id string) (Relationship, bool),
 	addRel func(direction Direction, relationship string, id string, node Node) Relationship,
-	removeRel func(direction Direction, relationship string, id string),
+	delRel func(direction Direction, relationship string, id string),
 	relationships func(direction Direction, typee string, fn func(relationship Relationship) bool)) Node {
-	return &iNode{Entity: entity, getRel: getRel, addRel: addRel, removeRel: removeRel, relationships: relationships}
+	return &iNode{Entity: entity, getRel: getRel, addRel: addRel, delRel: delRel, relationships: relationships}
 }
 
 func (i iNode) GetRelationship(direction Direction, relationship, id string) (Relationship, bool) {
@@ -97,8 +97,8 @@ func (i iNode) AddRelationship(direction Direction, relationship, id string, nod
 	return i.addRel(direction, relationship, id, node)
 }
 
-func (i iNode) RemoveRelationship(direction Direction, relationship, id string) {
-	i.removeRel(direction, relationship, id)
+func (i iNode) DelRelationship(direction Direction, relationship, id string) {
+	i.delRel(direction, relationship, id)
 }
 
 func (i iNode) Relationships(direction Direction, typee string, fn func(relationship Relationship) bool) {
@@ -187,7 +187,7 @@ func NewGraph(entityFunc EntityCreationFunc) Graph {
 					if nodeRelationships[nodeType][nodeID][direction][relation] == nil {
 						return nil, false
 					}
-					if rel, ok := nodeRelationships[nodeType][nodeID][direction][relation][id]; ok  {
+					if rel, ok := nodeRelationships[nodeType][nodeID][direction][relation][id]; ok {
 						return rel, true
 					}
 					return nil, false

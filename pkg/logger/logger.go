@@ -17,11 +17,10 @@ type Logger struct {
 	logger *zap.Logger
 }
 
-
 func New() *Logger {
 	hst, _ := os.Hostname()
 	fields := map[string]interface{}{
-		"host": hst,
+		"host":    hst,
 		"service": "morpheus",
 		"version": version.Version,
 	}
@@ -46,7 +45,6 @@ func New() *Logger {
 		logger: zap.New(core).With(toFields(fields)...),
 	}
 }
-
 
 func (l *Logger) Info(msg string, fields map[string]interface{}) {
 	l.logger.Info(msg, toFields(fields)...)
