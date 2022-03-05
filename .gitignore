@@ -4,3 +4,4 @@
 sample.graphql
 *.test
 *.prof
+db

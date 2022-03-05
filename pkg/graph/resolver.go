@@ -11,8 +11,8 @@ type Resolver struct {
 	raft  *raft.Raft
 }
 
-func NewResolver(graph api.Graph, raftLis net.Listener) (*Resolver, error) {
-	r, err := raft.NewRaft(graph, raftLis)
+func NewResolver(graph api.Graph, raftLis net.Listener, ropts ...raft.Opt) (*Resolver, error) {
+	r, err := raft.NewRaft(graph, raftLis, ropts...)
 	if err != nil {
 		return nil, err
 	}
