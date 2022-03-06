@@ -52,16 +52,16 @@ type ComplexityRoot struct {
 	}
 
 	Node struct {
-		AddRelationship    func(childComplexity int, direction model.Direction, relationship string, nodeKey model.Key) int
-		DelProperty        func(childComplexity int, key string) int
-		GetProperty        func(childComplexity int, key string) int
-		GetRelationship    func(childComplexity int, direction model.Direction, relationship string, id string) int
-		ID                 func(childComplexity int) int
-		Properties         func(childComplexity int, input *string) int
-		Relationships      func(childComplexity int, direction model.Direction, typeArg string, filter *model.Filter) int
-		RemoveRelationship func(childComplexity int, direction model.Direction, key model.Key) int
-		SetProperties      func(childComplexity int, properties map[string]interface{}) int
-		Type               func(childComplexity int) int
+		AddRelationship func(childComplexity int, direction model.Direction, relationship string, nodeKey model.Key) int
+		DelProperty     func(childComplexity int, key string) int
+		DelRelationship func(childComplexity int, direction model.Direction, key model.Key) int
+		GetProperty     func(childComplexity int, key string) int
+		GetRelationship func(childComplexity int, direction model.Direction, relationship string, id string) int
+		ID              func(childComplexity int) int
+		Properties      func(childComplexity int, input *string) int
+		Relationships   func(childComplexity int, direction model.Direction, typeArg string, filter *model.Filter) int
+		SetProperties   func(childComplexity int, properties map[string]interface{}) int
+		Type            func(childComplexity int) int
 	}
 
 	Query struct {
@@ -94,7 +94,7 @@ type NodeResolver interface {
 
 	GetRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, id string) (*model.Relationship, error)
 	AddRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, nodeKey model.Key) (*model.Relationship, error)
-
+	DelRelationship(ctx context.Context, obj *model.Node, direction model.Direction, key model.Key) (bool, error)
 	Relationships(ctx context.Context, obj *model.Node, direction model.Direction, typeArg string, filter *model.Filter) ([]*model.Relationship, error)
 }
 type QueryResolver interface {
@@ -172,6 +172,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Node.DelProperty(childComplexity, args["key"].(string)), true
 
+	case "Node.delRelationship":
+		if e.complexity.Node.DelRelationship == nil {
+			break
+		}
+
+		args, err := ec.field_Node_delRelationship_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Node.DelRelationship(childComplexity, args["direction"].(model.Direction), args["key"].(model.Key)), true
+
 	case "Node.getProperty":
 		if e.complexity.Node.GetProperty == nil {
 			break
@@ -226,18 +238,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Node.Relationships(childComplexity, args["direction"].(model.Direction), args["type"].(string), args["filter"].(*model.Filter)), true
-
-	case "Node.removeRelationship":
-		if e.complexity.Node.RemoveRelationship == nil {
-			break
-		}
-
-		args, err := ec.field_Node_removeRelationship_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Node.RemoveRelationship(childComplexity, args["direction"].(model.Direction), args["key"].(model.Key)), true
 
 	case "Node.setProperties":
 		if e.complexity.Node.SetProperties == nil {
@@ -453,6 +453,9 @@ input Expression {
 
 input Filter {
   expressions: [Expression!]
+  limit: Int
+  offset: Int
+  sort: String
 }
 
 enum Direction {
@@ -478,7 +481,7 @@ type Node implements Entity {
   delProperty(key: String!): Boolean!
   getRelationship(direction: Direction!, relationship: String!, id: String!): Relationship!
   addRelationship(direction: Direction!, relationship: String!, nodeKey: Key!): Relationship!
-  removeRelationship(direction: Direction!, key: Key!): Boolean!
+  delRelationship(direction: Direction!, key: Key!): Boolean!
   relationships(direction: Direction!, type: String!, filter: Filter): [Relationship!]
 }
 
@@ -600,6 +603,30 @@ func (ec *executionContext) field_Node_delProperty_args(ctx context.Context, raw
 	return args, nil
 }
 
+func (ec *executionContext) field_Node_delRelationship_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.Direction
+	if tmp, ok := rawArgs["direction"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
+		arg0, err = ec.unmarshalNDirection2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["direction"] = arg0
+	var arg1 model.Key
+	if tmp, ok := rawArgs["key"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
+		arg1, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["key"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Node_getProperty_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -693,30 +720,6 @@ func (ec *executionContext) field_Node_relationships_args(ctx context.Context, r
 		}
 	}
 	args["filter"] = arg2
-	return args, nil
-}
-
-func (ec *executionContext) field_Node_removeRelationship_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 model.Direction
-	if tmp, ok := rawArgs["direction"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
-		arg0, err = ec.unmarshalNDirection2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["direction"] = arg0
-	var arg1 model.Key
-	if tmp, ok := rawArgs["key"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
-		arg1, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["key"] = arg1
 	return args, nil
 }
 
@@ -1290,7 +1293,7 @@ func (ec *executionContext) _Node_addRelationship(ctx context.Context, field gra
 	return ec.marshalNRelationship2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationship(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Node_removeRelationship(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
+func (ec *executionContext) _Node_delRelationship(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -1301,13 +1304,13 @@ func (ec *executionContext) _Node_removeRelationship(ctx context.Context, field 
 		Object:     "Node",
 		Field:      field,
 		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
+		IsMethod:   true,
+		IsResolver: true,
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Node_removeRelationship_args(ctx, rawArgs)
+	args, err := ec.field_Node_delRelationship_args(ctx, rawArgs)
 	if err != nil {
 		ec.Error(ctx, err)
 		return graphql.Null
@@ -1315,7 +1318,7 @@ func (ec *executionContext) _Node_removeRelationship(ctx context.Context, field 
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.RemoveRelationship, nil
+		return ec.resolvers.Node().DelRelationship(rctx, obj, args["direction"].(model.Direction), args["key"].(model.Key))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3137,6 +3140,30 @@ func (ec *executionContext) unmarshalInputFilter(ctx context.Context, obj interf
 			if err != nil {
 				return it, err
 			}
+		case "limit":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("limit"))
+			it.Limit, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "offset":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("offset"))
+			it.Offset, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "sort":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("sort"))
+			it.Sort, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
 		}
 	}
 
@@ -3392,16 +3419,26 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 				return innerFunc(ctx)
 
 			})
-		case "removeRelationship":
+		case "delRelationship":
+			field := field
+
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Node_removeRelationship(ctx, field, obj)
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Node_delRelationship(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
 			}
 
-			out.Values[i] = innerFunc(ctx)
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
 
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&invalids, 1)
-			}
+			})
 		case "relationships":
 			field := field
 
@@ -4572,6 +4609,22 @@ func (ec *executionContext) unmarshalOFilter2ᚖgithubᚗcomᚋautom8terᚋmorph
 	}
 	res, err := ec.unmarshalInputFilter(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v interface{}) (*int, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalInt(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.SelectionSet, v *int) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	res := graphql.MarshalInt(*v)
+	return res
 }
 
 func (ec *executionContext) unmarshalOMap2map(ctx context.Context, v interface{}) (map[string]interface{}, error) {

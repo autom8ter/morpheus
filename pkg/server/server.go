@@ -8,7 +8,9 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/lru"
 	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/autom8ter/morpheus/pkg/auth"
 	"github.com/autom8ter/morpheus/pkg/logger"
+	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 	"net"
 	"net/http"
@@ -52,7 +54,15 @@ func Serve(ctx context.Context, opts *Opts, schema graphql.ExecutableSchema) err
 	mux := http.NewServeMux()
 	mux.Handle("/", playground.Handler("GraphQL playground", "/query"))
 	mux.Handle("/query", srv)
-	server := &http.Server{Handler: mux}
+	usrs := viper.GetStringMapString("auth.users")
+	var hndler http.Handler
+	if len(usrs) > 0 {
+		hndler = auth.Middleware(auth.BasicAuth(usrs), mux)
+	} else {
+		hndler = mux
+	}
+
+	server := &http.Server{Handler: logger.Middleware(logger.L, hndler)}
 	wg := errgroup.Group{}
 	wg.Go(func() error {
 		for {

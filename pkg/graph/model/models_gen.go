@@ -20,6 +20,9 @@ type Expression struct {
 
 type Filter struct {
 	Expressions []*Expression `json:"expressions"`
+	Limit       *int          `json:"limit"`
+	Offset      *int          `json:"offset"`
+	Sort        *string       `json:"sort"`
 }
 
 type Key struct {
@@ -28,16 +31,16 @@ type Key struct {
 }
 
 type Node struct {
-	ID                 string                 `json:"id"`
-	Type               string                 `json:"type"`
-	Properties         map[string]interface{} `json:"properties"`
-	GetProperty        interface{}            `json:"getProperty"`
-	SetProperties      bool                   `json:"setProperties"`
-	DelProperty        bool                   `json:"delProperty"`
-	GetRelationship    *Relationship          `json:"getRelationship"`
-	AddRelationship    *Relationship          `json:"addRelationship"`
-	RemoveRelationship bool                   `json:"removeRelationship"`
-	Relationships      []*Relationship        `json:"relationships"`
+	ID              string                 `json:"id"`
+	Type            string                 `json:"type"`
+	Properties      map[string]interface{} `json:"properties"`
+	GetProperty     interface{}            `json:"getProperty"`
+	SetProperties   bool                   `json:"setProperties"`
+	DelProperty     bool                   `json:"delProperty"`
+	GetRelationship *Relationship          `json:"getRelationship"`
+	AddRelationship *Relationship          `json:"addRelationship"`
+	DelRelationship bool                   `json:"delRelationship"`
+	Relationships   []*Relationship        `json:"relationships"`
 }
 
 func (Node) IsEntity() {}

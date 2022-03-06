@@ -17,6 +17,7 @@ input Filter {
   expressions: [Expression!]
   limit: Int
   offset: Int
+  sort: String
 }
 
 enum Direction {

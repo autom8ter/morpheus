@@ -5,29 +5,31 @@ package graph
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"github.com/autom8ter/morpheus/pkg/raft/fsm"
-
 	"github.com/autom8ter/morpheus/pkg/api"
+	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/autom8ter/morpheus/pkg/graph/generated"
 	"github.com/autom8ter/morpheus/pkg/graph/model"
+	"github.com/autom8ter/morpheus/pkg/raft/fsm"
 	"github.com/google/uuid"
+	"github.com/spf13/cast"
+	"sort"
 )
 
 func (r *mutationResolver) AddNode(ctx context.Context, typeArg string, properties map[string]interface{}) (*model.Node, error) {
-	id := uuid.New().String()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method: fsm.AddNodes,
 		AddNodes: []fsm.AddNode{
 			{
 				Type:       typeArg,
-				ID:         id,
+				ID:         uuid.New().String(),
 				Properties: properties,
 			},
 		},
 	}
-	bits, err := json.Marshal(cmd)
+	bits, err := encode.Marshal(cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -43,6 +45,8 @@ func (r *mutationResolver) AddNode(ctx context.Context, typeArg string, properti
 }
 
 func (r *mutationResolver) DelNode(ctx context.Context, key model.Key) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method: fsm.DelNodes,
 		DelNodes: []fsm.DelNode{
@@ -52,7 +56,7 @@ func (r *mutationResolver) DelNode(ctx context.Context, key model.Key) (bool, er
 			},
 		},
 	}
-	bits, err := json.Marshal(cmd)
+	bits, err := encode.Marshal(cmd)
 	if err != nil {
 		return false, err
 	}
@@ -67,6 +71,8 @@ func (r *mutationResolver) DelNode(ctx context.Context, key model.Key) (bool, er
 }
 
 func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node, input *string) (map[string]interface{}, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
 		return nil, err
@@ -75,6 +81,8 @@ func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node, input *s
 }
 
 func (r *nodeResolver) GetProperty(ctx context.Context, obj *model.Node, key string) (interface{}, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
 		return nil, err
@@ -83,6 +91,8 @@ func (r *nodeResolver) GetProperty(ctx context.Context, obj *model.Node, key str
 }
 
 func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, properties map[string]interface{}) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method: fsm.SetNodeProperties,
 		SetNodeProperties: []fsm.SetNodeProperty{
@@ -93,7 +103,7 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 			},
 		},
 	}
-	bits, err := json.Marshal(cmd)
+	bits, err := encode.Marshal(cmd)
 	if err != nil {
 		return false, err
 	}
@@ -108,6 +118,8 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 }
 
 func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, id string) (*model.Relationship, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
 		return nil, err
@@ -120,6 +132,8 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, dir
 }
 
 func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, nodeKey model.Key) (*model.Relationship, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method: fsm.AddRelationships,
 		AddRelationships: []fsm.AddRelationship{
@@ -134,7 +148,7 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, dir
 			},
 		},
 	}
-	bits, err := json.Marshal(cmd)
+	bits, err := encode.Marshal(cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -148,13 +162,47 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, dir
 	return toRelationship(val.([]api.Relationship)[0]), nil
 }
 
+func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, direction model.Direction, key model.Key) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cmd := &fsm.CMD{
+		Method: fsm.DelRelationships,
+		DelRelationships: []fsm.DelRelationship{
+			{
+				NodeType:       obj.Type,
+				NodeID:         obj.ID,
+				Relationship:   obj.Type,
+				RelationshipID: obj.ID,
+				Direction:      string(direction),
+			},
+		},
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return false, err
+	}
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return false, err
+	}
+	if err, ok := val.(error); ok {
+		return false, err
+	}
+	return true, nil
+}
+
 func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direction model.Direction, typeArg string, filter *model.Filter) ([]*model.Relationship, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
 		return nil, err
 	}
 	var rels []*model.Relationship
 	n.Relationships(api.Direction(direction), typeArg, func(relationship api.Relationship) bool {
+		if filter.Limit != nil && len(rels) > *filter.Limit {
+			return false
+		}
 
 		for _, exp := range filter.Expressions {
 			if !eval(exp, relationship) {
@@ -164,14 +212,37 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 		rels = append(rels, toRelationship(relationship))
 		return true
 	})
+	if filter.Sort != nil && rels[0].Properties[*filter.Sort] != nil {
+		sort.Slice(rels, func(i, j int) bool {
+			if rels[i].Properties[*filter.Sort] == nil {
+				return false
+			}
+			if rels[j].Properties[*filter.Sort] == nil {
+				return true
+			}
+			if val, err := cast.ToFloat64E(rels[i].Properties[*filter.Sort]); err == nil {
+				return val > cast.ToFloat64(rels[j].Properties[*filter.Sort])
+			}
+			return cast.ToString(rels[i].Properties[*filter.Sort]) > cast.ToString(rels[j].Properties[*filter.Sort])
+		})
+	} else {
+		sort.Slice(rels, func(i, j int) bool {
+			return rels[i].ID > rels[j].ID
+		})
+	}
+
 	return rels, nil
 }
 
 func (r *queryResolver) NodeTypes(ctx context.Context) ([]string, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.graph.NodeTypes(), nil
 }
 
 func (r *queryResolver) GetNode(ctx context.Context, key model.Key) (*model.Node, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	res, err := r.graph.GetNode(key.Type, key.ID)
 	if err != nil {
 		return nil, err
@@ -180,6 +251,8 @@ func (r *queryResolver) GetNode(ctx context.Context, key model.Key) (*model.Node
 }
 
 func (r *queryResolver) GetNodes(ctx context.Context, typeArg string, filter model.Filter) ([]*model.Node, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	var nodes []*model.Node
 	if err := r.graph.RangeNodes(typeArg, func(node api.Node) bool {
 		for _, exp := range filter.Expressions {
@@ -196,10 +269,14 @@ func (r *queryResolver) GetNodes(ctx context.Context, typeArg string, filter mod
 }
 
 func (r *queryResolver) Size(ctx context.Context) (int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.graph.Size(), nil
 }
 
 func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relationship, input *string) (map[string]interface{}, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
 		return nil, err
@@ -208,6 +285,8 @@ func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relati
 }
 
 func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relationship, key string) (interface{}, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
 		return false, err
@@ -216,6 +295,8 @@ func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relat
 }
 
 func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Relationship, properties map[string]interface{}) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method: fsm.SetRelationshipProperties,
 		SetRelationshipProperties: []fsm.SetRelationshipProperty{
@@ -228,7 +309,7 @@ func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Rel
 			},
 		},
 	}
-	bits, err := json.Marshal(cmd)
+	bits, err := encode.Marshal(cmd)
 	if err != nil {
 		return false, err
 	}

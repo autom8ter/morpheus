@@ -2,9 +2,9 @@ package fsm
 
 import (
 	"encoding/gob"
-	"encoding/json"
 	"fmt"
 	"github.com/autom8ter/morpheus/pkg/api"
+	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/hashicorp/raft"
 	"io"
 )
@@ -79,7 +79,7 @@ type AddRelationship struct {
 	Node2ID        string
 }
 
-type RemoveRelationship struct {
+type DelRelationship struct {
 	NodeType       string
 	NodeID         string
 	Direction      string
@@ -105,14 +105,14 @@ type CMD struct {
 	SetNodeProperties         []SetNodeProperty         `json:"setNodeProperties"`
 	SetRelationshipProperties []SetRelationshipProperty `json:"setRelationshipProperties"`
 	AddRelationships          []AddRelationship         `json:"addRelationships"`
-	DelRelationships          []RemoveRelationship      `json:"delRelationships"`
+	DelRelationships          []DelRelationship         `json:"delRelationships"`
 }
 
 func NewGraphFSM(g api.Graph) raft.FSM {
 	return &FSM{
 		ApplyFunc: func(log *raft.Log) interface{} {
 			cmd := &CMD{}
-			if err := json.Unmarshal(log.Data, cmd); err != nil {
+			if err := encode.Unmarshal(log.Data, cmd); err != nil {
 				return err
 			}
 			switch cmd.Method {

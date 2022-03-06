@@ -1,9 +1,9 @@
 package badger
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/autom8ter/morpheus/pkg/api"
+	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/dgraph-io/badger/v3"
 )
 
@@ -18,7 +18,7 @@ func NewGraph(dir string) api.Graph {
 				props = map[string]interface{}{}
 			}
 			if err := db.Update(func(txn *badger.Txn) error {
-				bits, _ := json.Marshal(props)
+				bits, _ := encode.Marshal(props)
 				if err := txn.Set(getKey(prefix, nodeType, nodeID), bits); err != nil {
 					return err
 				}
@@ -39,7 +39,7 @@ func NewGraph(dir string) api.Graph {
 						return err
 					}
 					if err := val.Value(func(val []byte) error {
-						return json.Unmarshal(val, &data)
+						return encode.Unmarshal(val, &data)
 					}); err != nil {
 						return err
 					}

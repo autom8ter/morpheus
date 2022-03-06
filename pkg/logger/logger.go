@@ -4,7 +4,9 @@ import (
 	"github.com/autom8ter/morpheus/pkg/version"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"net/http"
 	"os"
+	"time"
 )
 
 func init() {
@@ -76,4 +78,18 @@ func toFields(fields map[string]interface{}) []zap.Field {
 		zfields = append(zfields, zap.Any(k, v))
 	}
 	return zfields
+}
+
+func Middleware(lgger *Logger, handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		now := time.Now()
+		defer func() {
+			lgger.Info("http request/response", map[string]interface{}{
+				"url":        r.URL.String(),
+				"method":     r.Method,
+				"elapsed_ms": time.Since(now).Milliseconds(),
+			})
+		}()
+		handler.ServeHTTP(w, r)
+	})
 }
