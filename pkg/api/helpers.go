@@ -114,7 +114,7 @@ type graph struct {
 	rangeNodes func(typee string, fn func(node Node) bool) error
 	nodeTypes  func() []string
 	size       func() int
-	closer func() error
+	closer     func() error
 }
 
 func newGraph(
@@ -124,8 +124,8 @@ func newGraph(
 	rangeNodes func(typee string, fn func(node Node) bool) error,
 	nodeTypes func() []string,
 	size func() int,
-	closer func() (error),
-	) Graph {
+	closer func() error,
+) Graph {
 	return &graph{getNode: getNode, addNode: addNode, delNode: delNode, rangeNodes: rangeNodes, nodeTypes: nodeTypes, size: size, closer: closer}
 }
 

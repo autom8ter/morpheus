@@ -24,6 +24,13 @@ var serveCmd = &cobra.Command{
 	Run: func(_ *cobra.Command, _ []string) {
 		storage_path := viper.GetString("database.storage_path")
 		g := badger.NewGraph(fmt.Sprintf("%s/storage", storage_path))
+		defer func() {
+			if err := g.Close(); err != nil {
+				logger.L.Error("failed to close graph", map[string]interface{}{
+					"error": err,
+				})
+			}
+		}()
 		rlis, err := net.Listen("tcp", fmt.Sprintf(":%v", viper.GetInt("server.raft_port")))
 		if err != nil {
 			logger.L.Error("failed to start raft listener", map[string]interface{}{

@@ -1,0 +1,14 @@
+server:
+  graphl_port: 8080
+  raft_port: 7598
+  raft_cluster: ""
+database:
+  # storage_path: ./.morpheus
+features:
+  introspection: true
+  log_queries: false
+  apollo_tracing: false
+
+#auth:
+#  users:
+#    colemanw: 12345678
