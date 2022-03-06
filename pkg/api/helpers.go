@@ -114,6 +114,7 @@ type graph struct {
 	rangeNodes func(typee string, fn func(node Node) bool) error
 	nodeTypes  func() []string
 	size       func() int
+	closer func() error
 }
 
 func newGraph(
@@ -122,8 +123,10 @@ func newGraph(
 	delNode func(typee string, id string) error,
 	rangeNodes func(typee string, fn func(node Node) bool) error,
 	nodeTypes func() []string,
-	size func() int) Graph {
-	return &graph{getNode: getNode, addNode: addNode, delNode: delNode, rangeNodes: rangeNodes, nodeTypes: nodeTypes, size: size}
+	size func() int,
+	closer func() (error),
+	) Graph {
+	return &graph{getNode: getNode, addNode: addNode, delNode: delNode, rangeNodes: rangeNodes, nodeTypes: nodeTypes, size: size, closer: closer}
 }
 
 func (g graph) GetNode(typee string, id string) (Node, error) {
@@ -150,7 +153,11 @@ func (g graph) Size() int {
 	return g.size()
 }
 
-func NewGraph(entityFunc EntityCreationFunc) Graph {
+func (g graph) Close() error {
+	return g.closer()
+}
+
+func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 	nodes := map[string]map[string]Node{}
 	nodeRelationships := map[string]map[string]map[Direction]map[string]map[string]Relationship{}
 	return newGraph(
@@ -293,5 +300,6 @@ func NewGraph(entityFunc EntityCreationFunc) Graph {
 			}
 			return size
 		},
+		closer,
 	)
 }

@@ -41,6 +41,7 @@ type Graph interface {
 	RangeNodes(typee string, fn func(node Node) bool) error
 	NodeTypes() []string
 	Size() int
+	Close() error
 }
 
 type Operation func(graph Graph, input map[string]string, output chan interface{}) error

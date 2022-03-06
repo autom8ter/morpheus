@@ -50,6 +50,8 @@ func NewGraph(dir string) api.Graph {
 				return data
 			},
 			setProperties)
+	}, func() error {
+		return db.Close()
 	})
 }
 

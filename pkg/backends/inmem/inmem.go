@@ -14,5 +14,7 @@ func NewGraph() api.Graph {
 					properties[k] = v
 				}
 			})
+	}, func() error {
+		return nil
 	})
 }
