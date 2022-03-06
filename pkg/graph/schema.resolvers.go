@@ -265,6 +265,24 @@ func (r *queryResolver) GetNodes(ctx context.Context, typeArg string, filter mod
 	}); err != nil {
 		return nil, err
 	}
+	if filter.Sort != nil && nodes[0].Properties[*filter.Sort] != nil {
+		sort.Slice(nodes, func(i, j int) bool {
+			if nodes[i].Properties[*filter.Sort] == nil {
+				return false
+			}
+			if nodes[j].Properties[*filter.Sort] == nil {
+				return true
+			}
+			if val, err := cast.ToFloat64E(nodes[i].Properties[*filter.Sort]); err == nil {
+				return val > cast.ToFloat64(nodes[j].Properties[*filter.Sort])
+			}
+			return cast.ToString(nodes[i].Properties[*filter.Sort]) > cast.ToString(nodes[j].Properties[*filter.Sort])
+		})
+	} else {
+		sort.Slice(nodes, func(i, j int) bool {
+			return nodes[i].ID > nodes[j].ID
+		})
+	}
 	return nodes, nil
 }
 

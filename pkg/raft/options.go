@@ -7,6 +7,7 @@ import (
 )
 
 type Options struct {
+	raftSecret               string
 	raftDir                  string
 	peerID                   string
 	isLeader                 bool
@@ -38,6 +39,9 @@ func (o *Options) setDefaults() {
 	}
 	if o.raftDir == "" {
 		o.raftDir = "/tmp/graphik/raft"
+	}
+	if o.raftSecret == "" {
+		o.raftSecret = "morpheus"
 	}
 	os.MkdirAll(o.raftDir, 0700)
 }
@@ -83,6 +87,12 @@ func WithMaxPool(max int) Opt {
 func WithSnapshotRetention(retention int) Opt {
 	return func(o *Options) {
 		o.retainSnapshots = retention
+	}
+}
+
+func WithClusterSecret(secret string) Opt {
+	return func(o *Options) {
+		o.raftSecret = secret
 	}
 }
 

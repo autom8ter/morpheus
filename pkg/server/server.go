@@ -10,6 +10,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/autom8ter/morpheus/pkg/auth"
 	"github.com/autom8ter/morpheus/pkg/logger"
+	"github.com/autom8ter/morpheus/pkg/raft"
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 	"net"
@@ -26,7 +27,7 @@ type Opts struct {
 	Port          string
 }
 
-func Serve(ctx context.Context, opts *Opts, schema graphql.ExecutableSchema) error {
+func Serve(ctx context.Context, opts *Opts, r *raft.Raft, schema graphql.ExecutableSchema) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	if opts.Port == "" {
@@ -53,16 +54,17 @@ func Serve(ctx context.Context, opts *Opts, schema graphql.ExecutableSchema) err
 
 	mux := http.NewServeMux()
 	mux.Handle("/", playground.Handler("GraphQL playground", "/query"))
-	mux.Handle("/query", srv)
+
 	usrs := viper.GetStringMapString("auth.users")
-	var hndler http.Handler
 	if len(usrs) > 0 {
-		hndler = auth.Middleware(auth.BasicAuth(usrs), mux)
+		mux.Handle("/query", auth.Middleware(auth.BasicAuth(usrs), srv))
 	} else {
-		hndler = mux
+		mux.Handle("/query", srv)
 	}
 
-	server := &http.Server{Handler: logger.Middleware(logger.L, hndler)}
+	mux.Handle("/raft/join", r.JoinHTTPHandler())
+
+	server := &http.Server{Handler: logger.Middleware(logger.L, mux)}
 	wg := errgroup.Group{}
 	wg.Go(func() error {
 		for {

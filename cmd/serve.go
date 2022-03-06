@@ -9,9 +9,12 @@ import (
 	"github.com/autom8ter/morpheus/pkg/logger"
 	"github.com/autom8ter/morpheus/pkg/raft"
 	"github.com/autom8ter/morpheus/pkg/server"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/sync/errgroup"
 	"net"
+	"time"
 )
 
 // serveCmd represents the serve command
@@ -19,9 +22,9 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "start server",
 	Run: func(_ *cobra.Command, _ []string) {
-		storage_path := viper.GetString("storage_path")
+		storage_path := viper.GetString("database.storage_path")
 		g := badger.NewGraph(fmt.Sprintf("%s/storage", storage_path))
-		rlis, err := net.Listen("tcp", fmt.Sprintf(":%v", viper.GetInt("raft_port")))
+		rlis, err := net.Listen("tcp", fmt.Sprintf(":%v", viper.GetInt("server.raft_port")))
 		if err != nil {
 			logger.L.Error("failed to start raft listener", map[string]interface{}{
 				"error": err,
@@ -29,13 +32,22 @@ var serveCmd = &cobra.Command{
 			return
 		}
 		defer rlis.Close()
-		resolver, err := graph.NewResolver(g, rlis, raft.WithRaftDir(fmt.Sprintf("%s/raft", storage_path)))
+		joinRaft := viper.GetString("server.raft_cluster")
+		rft, err := raft.NewRaft(
+			g,
+			rlis,
+			raft.WithRaftDir(fmt.Sprintf("%s/raft", storage_path)),
+			raft.WithTimeout(3*time.Second),
+			raft.WithIsLeader(joinRaft == ""),
+			raft.WithClusterSecret(viper.GetString("server.raft_secret")),
+		)
 		if err != nil {
-			logger.L.Error("failed to create graphql resolver", map[string]interface{}{
+			logger.L.Error("failed to create raft", map[string]interface{}{
 				"error": err,
 			})
 			return
 		}
+		resolver := graph.NewResolver(g, rft)
 		defer func() {
 			if err := resolver.Close(); err != nil {
 				logger.L.Error("failed to close graphql resolver", map[string]interface{}{
@@ -48,17 +60,39 @@ var serveCmd = &cobra.Command{
 			Directives: generated.DirectiveRoot{},
 			Complexity: generated.ComplexityRoot{},
 		})
-		gport := viper.GetInt("graphql_port")
+		gport := viper.GetInt("server.graphql_port")
 		logger.L.Info("starting server", map[string]interface{}{
 			"graphql_port": gport,
 			"raft_addr":    rlis.Addr().String(),
 		})
-		if err := server.Serve(context.Background(), &server.Opts{
-			Tracing:       viper.GetBool("features.tracing"),
-			Introspection: viper.GetBool("features.introspection"),
-			LogQueries:    viper.GetBool("features.log_queries"),
-			Port:          fmt.Sprintf(":%v", gport),
-		}, schema); err != nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		egp := errgroup.Group{}
+		if joinRaft != "" {
+			egp.Go(func() error {
+				if !raft.JoinCluster(
+					context.Background(),
+					joinRaft,
+					viper.GetString("server.raft_local_addr"),
+					viper.GetString("server.raft_secret"),
+				) {
+					cancel()
+					return errors.New("failed to join raft cluster")
+				}
+				return nil
+			})
+		}
+
+		egp.Go(func() error {
+			return server.Serve(ctx, &server.Opts{
+				Tracing:       viper.GetBool("features.tracing"),
+				Introspection: viper.GetBool("features.introspection"),
+				LogQueries:    viper.GetBool("features.log_queries"),
+				Port:          fmt.Sprintf(":%v", gport),
+			}, rft, schema)
+		})
+
+		if err := egp.Wait(); err != nil {
 			logger.L.Error("server failure", map[string]interface{}{
 				"error": err,
 			})

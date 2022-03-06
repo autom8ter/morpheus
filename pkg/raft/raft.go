@@ -1,16 +1,21 @@
 package raft
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/autom8ter/morpheus/pkg/api"
+	"github.com/autom8ter/morpheus/pkg/logger"
 	fsm2 "github.com/autom8ter/morpheus/pkg/raft/fsm"
 	"github.com/autom8ter/morpheus/pkg/raft/storage"
 	transport2 "github.com/autom8ter/morpheus/pkg/raft/transport"
 	"github.com/hashicorp/raft"
 	"github.com/pkg/errors"
+	"io/ioutil"
 	"net"
+	"net/http"
 	"os"
 	"time"
 )
@@ -173,4 +178,101 @@ func hash(val []byte) string {
 	h.Write(val)
 	bs := h.Sum(nil)
 	return hex.EncodeToString(bs)
+}
+
+const raftUser = "morpheus-raft"
+
+type JoinRaftRequest struct {
+	NodeID   string `json:"nodeId"`
+	NodeAddr string `json:"nodeAddr"`
+}
+
+func (rft *Raft) JoinHTTPHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		usr, pw, ok := r.BasicAuth()
+		if !ok {
+			http.Error(w, "raft: missing username/password", http.StatusUnauthorized)
+			return
+		}
+		if usr != raftUser {
+			http.Error(w, "raft: incorrect username", http.StatusUnauthorized)
+			return
+		}
+		if pw != rft.opts.raftSecret {
+			http.Error(w, "raft: incorrect password", http.StatusUnauthorized)
+			return
+		}
+		req := &JoinRaftRequest{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "raft: failed to encode request", http.StatusBadRequest)
+			return
+		}
+		if err := rft.Join(req.NodeID, req.NodeAddr); err != nil {
+			logger.L.Error("raft: failed to join cluster", map[string]interface{}{
+				"error":     err,
+				"node_id":   req.NodeID,
+				"node_addr": req.NodeAddr,
+			})
+			http.Error(w, "raft: failed to join cluster", http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func JoinCluster(ctx context.Context, clusterAddr, localAddr, raftSecret string) bool {
+	for x := 0; x < 30; x++ {
+		if ctx.Err() != nil {
+			return false
+		}
+		if err := pingTCP(localAddr); err != nil {
+			logger.L.Error("failed to join cluster - retrying",
+				map[string]interface{}{
+					"error": err,
+				},
+			)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		req, err := http.NewRequest(http.MethodPost, clusterAddr, nil)
+		if err != nil {
+			logger.L.Error("failed to join cluster", map[string]interface{}{
+				"error": err,
+			})
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		req.SetBasicAuth(raftUser, raftSecret)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			logger.L.Error("failed to join cluster", map[string]interface{}{
+				"error": err,
+			})
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			return true
+		}
+		if resp.StatusCode != http.StatusOK {
+			bits, _ := ioutil.ReadAll(resp.Body)
+			logger.L.Error("failed to join cluster", map[string]interface{}{
+				"response": string(bits),
+			})
+			time.Sleep(1 * time.Second)
+			continue
+		}
+	}
+	return false
+}
+
+func pingTCP(address string) error {
+	timeout := time.Second
+	conn, err := net.DialTimeout("tcp", address, timeout)
+	if err != nil {
+		return errors.Wrap(err, "tcp ping failure")
+	}
+	defer conn.Close()
+	return nil
 }
