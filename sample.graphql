@@ -18,7 +18,7 @@
 
 
 query {
-    getNode(key: {
+    get(key: {
         id: "473cf061-b178-4faa-aeb4-bae7b97ee3cc",
         type: "user"
     }){
@@ -40,7 +40,7 @@ query {
 
 
 # query {
-#     getNode(key: {
+#     get(key: {
 #         id: "55053424-a6ee-4ccf-82ff-3ff17a400c20",
 #         type: "user"
 #     }){

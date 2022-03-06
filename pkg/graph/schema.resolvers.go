@@ -6,6 +6,8 @@ package graph
 import (
 	"context"
 	"fmt"
+	"sort"
+
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/autom8ter/morpheus/pkg/graph/generated"
@@ -13,10 +15,9 @@ import (
 	"github.com/autom8ter/morpheus/pkg/raft/fsm"
 	"github.com/google/uuid"
 	"github.com/spf13/cast"
-	"sort"
 )
 
-func (r *mutationResolver) AddNode(ctx context.Context, typeArg string, properties map[string]interface{}) (*model.Node, error) {
+func (r *mutationResolver) Add(ctx context.Context, typeArg string, properties map[string]interface{}) (*model.Node, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
@@ -44,7 +45,34 @@ func (r *mutationResolver) AddNode(ctx context.Context, typeArg string, properti
 	return toNode(val.([]api.Node)[0]), nil
 }
 
-func (r *mutationResolver) DelNode(ctx context.Context, key model.Key) (bool, error) {
+func (r *mutationResolver) Set(ctx context.Context, typeArg string, id string, properties map[string]interface{}) (*model.Node, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cmd := &fsm.CMD{
+		Method: fsm.SetNodeProperties,
+		SetNodeProperties: []fsm.SetNodeProperty{
+			{
+				Type:       typeArg,
+				ID:         id,
+				Properties: properties,
+			},
+		},
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return nil, err
+	}
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return nil, err
+	}
+	if err, ok := val.(error); ok {
+		return nil, err
+	}
+	return toNode(val.([]api.Node)[0]), nil
+}
+
+func (r *mutationResolver) Del(ctx context.Context, key model.Key) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
@@ -70,7 +98,7 @@ func (r *mutationResolver) DelNode(ctx context.Context, key model.Key) (bool, er
 	return true, nil
 }
 
-func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node, input *string) (map[string]interface{}, error) {
+func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[string]interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
@@ -212,35 +240,47 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 		rels = append(rels, toRelationship(relationship))
 		return true
 	})
-	if filter.Sort != nil && rels[0].Properties[*filter.Sort] != nil {
+	if filter.OrderBy != nil && rels[0].Properties[filter.OrderBy.Field] != nil {
 		sort.Slice(rels, func(i, j int) bool {
-			if rels[i].Properties[*filter.Sort] == nil {
+			if rels[i].Properties[filter.OrderBy.Field] == nil {
 				return false
 			}
-			if rels[j].Properties[*filter.Sort] == nil {
+			if rels[j].Properties[filter.OrderBy.Field] == nil {
 				return true
 			}
-			if val, err := cast.ToFloat64E(rels[i].Properties[*filter.Sort]); err == nil {
-				return val > cast.ToFloat64(rels[j].Properties[*filter.Sort])
+			if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+				if val, err := cast.ToFloat64E(rels[i].Properties[filter.OrderBy.Field]); err == nil {
+					return val < cast.ToFloat64(rels[j].Properties[filter.OrderBy.Field])
+				}
+				return cast.ToString(rels[i].Properties[filter.OrderBy.Field]) < cast.ToString(rels[j].Properties[filter.OrderBy.Field])
 			}
-			return cast.ToString(rels[i].Properties[*filter.Sort]) > cast.ToString(rels[j].Properties[*filter.Sort])
+			if val, err := cast.ToFloat64E(rels[i].Properties[filter.OrderBy.Field]); err == nil {
+				return val > cast.ToFloat64(rels[j].Properties[filter.OrderBy.Field])
+			}
+			return cast.ToString(rels[i].Properties[filter.OrderBy.Field]) > cast.ToString(rels[j].Properties[filter.OrderBy.Field])
 		})
 	} else {
-		sort.Slice(rels, func(i, j int) bool {
-			return rels[i].ID > rels[j].ID
-		})
+		if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+			sort.Slice(rels, func(i, j int) bool {
+				return rels[i].ID < rels[j].ID
+			})
+		} else {
+			sort.Slice(rels, func(i, j int) bool {
+				return rels[i].ID > rels[j].ID
+			})
+		}
 	}
 
 	return rels, nil
 }
 
-func (r *queryResolver) NodeTypes(ctx context.Context) ([]string, error) {
+func (r *queryResolver) Types(ctx context.Context) ([]string, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.graph.NodeTypes(), nil
 }
 
-func (r *queryResolver) GetNode(ctx context.Context, key model.Key) (*model.Node, error) {
+func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	res, err := r.graph.GetNode(key.Type, key.ID)
@@ -250,11 +290,14 @@ func (r *queryResolver) GetNode(ctx context.Context, key model.Key) (*model.Node
 	return toNode(res), nil
 }
 
-func (r *queryResolver) GetNodes(ctx context.Context, typeArg string, filter model.Filter) ([]*model.Node, error) {
+func (r *queryResolver) List(ctx context.Context, typeArg string, filter model.Filter) ([]*model.Node, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var nodes []*model.Node
 	if err := r.graph.RangeNodes(typeArg, func(node api.Node) bool {
+		if filter.Limit != nil && len(nodes) > *filter.Limit {
+			return false
+		}
 		for _, exp := range filter.Expressions {
 			if !eval(exp, node) {
 				return true
@@ -265,23 +308,35 @@ func (r *queryResolver) GetNodes(ctx context.Context, typeArg string, filter mod
 	}); err != nil {
 		return nil, err
 	}
-	if filter.Sort != nil && nodes[0].Properties[*filter.Sort] != nil {
+	if filter.OrderBy != nil && nodes[0].Properties[filter.OrderBy.Field] != nil {
 		sort.Slice(nodes, func(i, j int) bool {
-			if nodes[i].Properties[*filter.Sort] == nil {
+			if nodes[i].Properties[filter.OrderBy.Field] == nil {
 				return false
 			}
-			if nodes[j].Properties[*filter.Sort] == nil {
+			if nodes[j].Properties[filter.OrderBy.Field] == nil {
 				return true
 			}
-			if val, err := cast.ToFloat64E(nodes[i].Properties[*filter.Sort]); err == nil {
-				return val > cast.ToFloat64(nodes[j].Properties[*filter.Sort])
+			if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+				if val, err := cast.ToFloat64E(nodes[i].Properties[filter.OrderBy.Field]); err == nil {
+					return val < cast.ToFloat64(nodes[j].Properties[filter.OrderBy.Field])
+				}
+				return cast.ToString(nodes[i].Properties[filter.OrderBy.Field]) < cast.ToString(nodes[j].Properties[filter.OrderBy.Field])
 			}
-			return cast.ToString(nodes[i].Properties[*filter.Sort]) > cast.ToString(nodes[j].Properties[*filter.Sort])
+			if val, err := cast.ToFloat64E(nodes[i].Properties[filter.OrderBy.Field]); err == nil {
+				return val > cast.ToFloat64(nodes[j].Properties[filter.OrderBy.Field])
+			}
+			return cast.ToString(nodes[i].Properties[filter.OrderBy.Field]) > cast.ToString(nodes[j].Properties[filter.OrderBy.Field])
 		})
 	} else {
-		sort.Slice(nodes, func(i, j int) bool {
-			return nodes[i].ID > nodes[j].ID
-		})
+		if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+			sort.Slice(nodes, func(i, j int) bool {
+				return nodes[i].ID < nodes[j].ID
+			})
+		} else {
+			sort.Slice(nodes, func(i, j int) bool {
+				return nodes[i].ID > nodes[j].ID
+			})
+		}
 	}
 	return nodes, nil
 }
@@ -292,7 +347,7 @@ func (r *queryResolver) Size(ctx context.Context) (int, error) {
 	return r.graph.Size(), nil
 }
 
-func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relationship, input *string) (map[string]interface{}, error) {
+func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)

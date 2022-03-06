@@ -22,7 +22,7 @@ type Filter struct {
 	Expressions []*Expression `json:"expressions"`
 	Limit       *int          `json:"limit"`
 	Offset      *int          `json:"offset"`
-	Sort        *string       `json:"sort"`
+	OrderBy     *OrderBy      `json:"order_by"`
 }
 
 type Key struct {
@@ -44,6 +44,11 @@ type Node struct {
 }
 
 func (Node) IsEntity() {}
+
+type OrderBy struct {
+	Field   string `json:"field"`
+	Reverse *bool  `json:"reverse"`
+}
 
 type Relationship struct {
 	ID            string                 `json:"id"`

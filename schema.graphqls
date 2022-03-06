@@ -17,7 +17,12 @@ input Filter {
   expressions: [Expression!]
   limit: Int
   offset: Int
-  sort: String
+  order_by: OrderBy
+}
+
+input OrderBy {
+  field: String!
+  reverse: Boolean
 }
 
 enum Direction {
@@ -28,7 +33,7 @@ enum Direction {
 interface Entity {
   id: String!
   type: String!
-  properties(input: String): Map!
+  properties: Map!
   getProperty(key: String!): Any
   setProperties(properties: Map!): Boolean!
   delProperty(key: String!): Boolean!
@@ -37,7 +42,7 @@ interface Entity {
 type Node implements Entity {
   id: String!
   type: String!
-  properties(input: String): Map!
+  properties: Map!
   getProperty(key: String!): Any
   setProperties(properties: Map!): Boolean!
   delProperty(key: String!): Boolean!
@@ -50,7 +55,7 @@ type Node implements Entity {
 type Relationship implements Entity {
   id: String!
   type: String!
-  properties(input: String): Map!
+  properties: Map!
   getProperty(key: String!): Any
   setProperties(properties: Map!): Boolean!
   delProperty(key: String!): Boolean!
@@ -60,13 +65,14 @@ type Relationship implements Entity {
 
 
 type Query {
-  nodeTypes: [String!]
-  getNode(key: Key!): Node!
-  getNodes(type: String!, filter: Filter!): [Node!]
+  types: [String!]
+  get(key: Key!): Node!
+  list(type: String!, filter: Filter!): [Node!]
   size: Int!
 }
 
 type Mutation {
-  addNode(type: String!, properties: Map): Node!
-  delNode(key: Key!): Boolean!
+  add(type: String!, properties: Map): Node!
+  set(type: String!, id: String!, properties: Map): Node!
+  del(key: Key!): Boolean!
 }
