@@ -229,7 +229,7 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 	var rels []*model.Relationship
 	var skip = 0
 	n.Relationships(api.Direction(direction), typeArg, func(relationship api.Relationship) bool {
-		if filter.Offset != nil && *filter.Offset > skip {
+		if filter.Offset != nil && filter.Limit != nil && *filter.Offset**filter.Limit > skip {
 			skip++
 			return true
 		}
@@ -245,37 +245,38 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 		rels = append(rels, toRelationship(relationship))
 		return true
 	})
-	if filter.OrderBy != nil && rels[0].Properties[filter.OrderBy.Field] != nil {
-		sort.Slice(rels, func(i, j int) bool {
-			if rels[i].Properties[filter.OrderBy.Field] == nil {
-				return false
-			}
-			if rels[j].Properties[filter.OrderBy.Field] == nil {
-				return true
-			}
-			if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
-				if val, err := cast.ToFloat64E(rels[i].Properties[filter.OrderBy.Field]); err == nil {
-					return val < cast.ToFloat64(rels[j].Properties[filter.OrderBy.Field])
-				}
-				return cast.ToString(rels[i].Properties[filter.OrderBy.Field]) < cast.ToString(rels[j].Properties[filter.OrderBy.Field])
-			}
-			if val, err := cast.ToFloat64E(rels[i].Properties[filter.OrderBy.Field]); err == nil {
-				return val > cast.ToFloat64(rels[j].Properties[filter.OrderBy.Field])
-			}
-			return cast.ToString(rels[i].Properties[filter.OrderBy.Field]) > cast.ToString(rels[j].Properties[filter.OrderBy.Field])
-		})
-	} else {
-		if filter.OrderBy != nil && filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+	if len(rels) > 0 {
+		if filter.OrderBy != nil && rels[0].Properties[filter.OrderBy.Field] != nil {
 			sort.Slice(rels, func(i, j int) bool {
-				return rels[i].ID < rels[j].ID
+				if rels[i].Properties[filter.OrderBy.Field] == nil {
+					return false
+				}
+				if rels[j].Properties[filter.OrderBy.Field] == nil {
+					return true
+				}
+				if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+					if val, err := cast.ToFloat64E(rels[i].Properties[filter.OrderBy.Field]); err == nil {
+						return val < cast.ToFloat64(rels[j].Properties[filter.OrderBy.Field])
+					}
+					return cast.ToString(rels[i].Properties[filter.OrderBy.Field]) < cast.ToString(rels[j].Properties[filter.OrderBy.Field])
+				}
+				if val, err := cast.ToFloat64E(rels[i].Properties[filter.OrderBy.Field]); err == nil {
+					return val > cast.ToFloat64(rels[j].Properties[filter.OrderBy.Field])
+				}
+				return cast.ToString(rels[i].Properties[filter.OrderBy.Field]) > cast.ToString(rels[j].Properties[filter.OrderBy.Field])
 			})
 		} else {
-			sort.Slice(rels, func(i, j int) bool {
-				return rels[i].ID > rels[j].ID
-			})
+			if filter.OrderBy != nil && filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+				sort.Slice(rels, func(i, j int) bool {
+					return rels[i].ID < rels[j].ID
+				})
+			} else {
+				sort.Slice(rels, func(i, j int) bool {
+					return rels[i].ID > rels[j].ID
+				})
+			}
 		}
 	}
-
 	return rels, nil
 }
 
@@ -301,7 +302,7 @@ func (r *queryResolver) List(ctx context.Context, typeArg string, filter model.F
 	var nodes []*model.Node
 	skip := 0
 	if err := r.graph.RangeNodes(typeArg, func(node api.Node) bool {
-		if filter.Offset != nil && *filter.Offset > skip {
+		if filter.Offset != nil && filter.Limit != nil && *filter.Offset**filter.Limit > skip {
 			skip++
 			return true
 		}
@@ -318,34 +319,36 @@ func (r *queryResolver) List(ctx context.Context, typeArg string, filter model.F
 	}); err != nil {
 		return nil, err
 	}
-	if filter.OrderBy != nil && nodes[0].Properties[filter.OrderBy.Field] != nil {
-		sort.Slice(nodes, func(i, j int) bool {
-			if nodes[i].Properties[filter.OrderBy.Field] == nil {
-				return false
-			}
-			if nodes[j].Properties[filter.OrderBy.Field] == nil {
-				return true
-			}
-			if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
-				if val, err := cast.ToFloat64E(nodes[i].Properties[filter.OrderBy.Field]); err == nil {
-					return val < cast.ToFloat64(nodes[j].Properties[filter.OrderBy.Field])
-				}
-				return cast.ToString(nodes[i].Properties[filter.OrderBy.Field]) < cast.ToString(nodes[j].Properties[filter.OrderBy.Field])
-			}
-			if val, err := cast.ToFloat64E(nodes[i].Properties[filter.OrderBy.Field]); err == nil {
-				return val > cast.ToFloat64(nodes[j].Properties[filter.OrderBy.Field])
-			}
-			return cast.ToString(nodes[i].Properties[filter.OrderBy.Field]) > cast.ToString(nodes[j].Properties[filter.OrderBy.Field])
-		})
-	} else {
-		if filter.OrderBy != nil && filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+	if len(nodes) > 0 {
+		if filter.OrderBy != nil && nodes[0].Properties[filter.OrderBy.Field] != nil {
 			sort.Slice(nodes, func(i, j int) bool {
-				return nodes[i].ID < nodes[j].ID
+				if nodes[i].Properties[filter.OrderBy.Field] == nil {
+					return false
+				}
+				if nodes[j].Properties[filter.OrderBy.Field] == nil {
+					return true
+				}
+				if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+					if val, err := cast.ToFloat64E(nodes[i].Properties[filter.OrderBy.Field]); err == nil {
+						return val < cast.ToFloat64(nodes[j].Properties[filter.OrderBy.Field])
+					}
+					return cast.ToString(nodes[i].Properties[filter.OrderBy.Field]) < cast.ToString(nodes[j].Properties[filter.OrderBy.Field])
+				}
+				if val, err := cast.ToFloat64E(nodes[i].Properties[filter.OrderBy.Field]); err == nil {
+					return val > cast.ToFloat64(nodes[j].Properties[filter.OrderBy.Field])
+				}
+				return cast.ToString(nodes[i].Properties[filter.OrderBy.Field]) > cast.ToString(nodes[j].Properties[filter.OrderBy.Field])
 			})
 		} else {
-			sort.Slice(nodes, func(i, j int) bool {
-				return nodes[i].ID > nodes[j].ID
-			})
+			if filter.OrderBy != nil && filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+				sort.Slice(nodes, func(i, j int) bool {
+					return nodes[i].ID < nodes[j].ID
+				})
+			} else {
+				sort.Slice(nodes, func(i, j int) bool {
+					return nodes[i].ID > nodes[j].ID
+				})
+			}
 		}
 	}
 	return nodes, nil
