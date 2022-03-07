@@ -147,18 +147,13 @@ func NewGraphFSM(g api.Graph) raft.FSM {
 				return nodes
 			case SetRelationshipProperties:
 				var rels []api.Relationship
-				for _, node := range cmd.SetRelationshipProperties {
-					n, err := g.GetNode(node.NodeType, node.NodeID)
+				for _, relationship := range cmd.SetRelationshipProperties {
+					r, err := g.GetRelationship(relationship.Relationship, relationship.RelationshipID)
 					if err != nil {
 						return err
 					}
-					if rel, ok := n.GetRelationship(api.Direction(api.Outgoing), node.Relationship, node.RelationshipID); ok {
-						rel.SetProperties(node.Properties)
-						rels = append(rels, rel)
-					} else if rel, ok := n.GetRelationship(api.Direction(api.Incoming), node.Relationship, node.RelationshipID); ok {
-						rel.SetProperties(node.Properties)
-						rels = append(rels, rel)
-					}
+					r.SetProperties(relationship.Properties)
+					rels = append(rels, r)
 				}
 				return rels
 			case AddRelationships:

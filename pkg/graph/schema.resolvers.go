@@ -528,8 +528,7 @@ func (r *queryResolver) Size(ctx context.Context) (int, error) {
 func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	// TODO: fix
-	n, err := r.graph.GetNode(obj.Type, obj.ID)
+	n, err := r.graph.GetRelationship(obj.Type, obj.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -539,7 +538,7 @@ func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relati
 func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relationship, key string) (interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	n, err := r.graph.GetNode(obj.Type, obj.ID)
+	n, err := r.graph.GetRelationship(obj.Type, obj.ID)
 	if err != nil {
 		return false, err
 	}

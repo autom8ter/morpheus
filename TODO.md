@@ -6,5 +6,6 @@
 - [x] bulk add/set/delete
 
 - [ ] sessions for user interface
-- [ ] redirect traffic to raft leader
 - [ ] custom disk storage implementation
+- [ ] redirect traffic to raft leader
+- [ ] benchmarks against imdb dataset
