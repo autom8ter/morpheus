@@ -40,6 +40,11 @@ type Graph interface {
 	DelNode(typee string, id string) error
 	RangeNodes(skip int, typee string, fn func(node Node) bool) error
 	NodeTypes() []string
+
+	GetRelationship(relation string, id string) (Relationship, error)
+	RangeRelationships(skip int, relation string, fn func(node Relationship) bool) error
+	RelationshipTypes() []string
+
 	Size() int
 	Close() error
 }

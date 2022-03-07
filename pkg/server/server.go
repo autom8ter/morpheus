@@ -14,6 +14,7 @@ import (
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/auth"
 	"github.com/autom8ter/morpheus/pkg/config"
+	"github.com/autom8ter/morpheus/pkg/dataloader"
 	"github.com/autom8ter/morpheus/pkg/graph"
 	"github.com/autom8ter/morpheus/pkg/graph/generated"
 	"github.com/autom8ter/morpheus/pkg/logger"
@@ -101,9 +102,9 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 	mux.Handle("/", playground.Handler("GraphQL playground", "/query"))
 
 	if cfg.Auth != nil && len(cfg.Auth.Users) > 0 {
-		mux.Handle("/query", auth.Middleware(auth.BasicAuth(cfg.Auth.Users), srv))
+		mux.Handle("/query", dataloader.Middleware(g, auth.Middleware(auth.BasicAuth(cfg.Auth.Users), srv)))
 	} else {
-		mux.Handle("/query", srv)
+		mux.Handle("/query", dataloader.Middleware(g, srv))
 	}
 
 	mux.Handle("/raft/join", rft.JoinHTTPHandler())

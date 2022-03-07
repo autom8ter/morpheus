@@ -114,6 +114,9 @@ type graph struct {
 	delNode    func(typee string, id string) error
 	rangeNodes func(skip int, typee string, fn func(node Node) bool) error
 	nodeTypes  func() []string
+	getRel     func(typee string, id string) (Relationship, error)
+	rangeRels  func(skip int, typee string, fn func(relation Relationship) bool) error
+	relTypes   func() []string
 	size       func() int
 	closer     func() error
 }
@@ -124,10 +127,24 @@ func newGraph(
 	delNode func(typee string, id string) error,
 	rangeNodes func(skip int, typee string, fn func(node Node) bool) error,
 	nodeTypes func() []string,
+	getRel func(typee string, id string) (Relationship, error),
+	rangeRels func(skip int, typee string, fn func(relation Relationship) bool) error,
+	relTypes func() []string,
 	size func() int,
 	closer func() error,
 ) Graph {
-	return &graph{getNode: getNode, addNode: addNode, delNode: delNode, rangeNodes: rangeNodes, nodeTypes: nodeTypes, size: size, closer: closer}
+	return &graph{
+		getNode:    getNode,
+		addNode:    addNode,
+		delNode:    delNode,
+		rangeNodes: rangeNodes,
+		nodeTypes:  nodeTypes,
+		getRel:     getRel,
+		rangeRels:  rangeRels,
+		relTypes:   relTypes,
+		size:       size,
+		closer:     closer,
+	}
 }
 
 func (g graph) GetNode(typee string, id string) (Node, error) {
@@ -150,6 +167,18 @@ func (g graph) NodeTypes() []string {
 	return g.nodeTypes()
 }
 
+func (g graph) GetRelationship(relation string, id string) (Relationship, error) {
+	return g.getRel(relation, id)
+}
+
+func (g graph) RangeRelationships(skip int, relation string, fn func(node Relationship) bool) error {
+	return g.rangeRels(skip, relation, fn)
+}
+
+func (g graph) RelationshipTypes() []string {
+	return g.relTypes()
+}
+
 func (g graph) Size() int {
 	return g.size()
 }
@@ -160,6 +189,7 @@ func (g graph) Close() error {
 
 func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 	nodes := map[string]datastructure.OrderedMap{}
+	relationships := map[string]datastructure.OrderedMap{}
 	nodeRelationships := map[string]map[string]map[Direction]map[string]datastructure.OrderedMap{}
 	return newGraph(
 		func(nodeType string, nodeID string) (Node, error) {
@@ -208,6 +238,9 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 					return val.(Relationship), true
 				},
 				func(direction Direction, relation, relationshipID string, node Node) Relationship {
+					if relationships[relation] == nil {
+						relationships[relation] = datastructure.NewOrderedMap()
+					}
 					relationship := NewRelationship(
 						entityFunc("2_", relation, relationshipID, map[string]interface{}{}),
 						func() Node {
@@ -239,6 +272,8 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 					} else {
 						nodeRelationships[node.Type()][node.ID()][Outgoing][relation].Add(relationship.ID(), relationship)
 					}
+					relationships[relation].Add(relationshipID, relation)
+
 					return relationship
 				},
 				func(direction Direction, relationship, id string) {
@@ -263,6 +298,8 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 
 						nodeRelationships[rel.Target().Type()][rel.Target().ID()][Outgoing][relationship].Del(id)
 						nodeRelationships[rel.Target().Type()][rel.Target().ID()][Incoming][relationship].Del(id)
+
+						relationships[relationship].Del(id)
 					}
 				},
 				func(skip int, direction Direction, relation string, fn func(node Relationship) bool) {
@@ -291,6 +328,7 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 				for relationship, values := range types {
 					values.Range(0, func(val interface{}) bool {
 						rel := val.(Relationship)
+						relationships[relationship].Del(rel.ID())
 						nodeRelationships[rel.Source().Type()][rel.Source().ID()][Outgoing][relationship].Del(rel.ID())
 						nodeRelationships[rel.Source().Type()][rel.Source().ID()][Incoming][relationship].Del(rel.ID())
 
@@ -320,6 +358,15 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 				types = append(types, k)
 			}
 			return types
+		},
+		func(typee string, id string) (Relationship, error) {
+			return nil, nil
+		},
+		func(skip int, typee string, fn func(relation Relationship) bool) error {
+			return nil
+		},
+		func() []string {
+			return nil
 		},
 		func() int {
 			size := 0

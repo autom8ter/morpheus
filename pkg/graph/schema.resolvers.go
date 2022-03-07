@@ -7,16 +7,22 @@ import (
 	"context"
 	"fmt"
 	"github.com/autom8ter/morpheus/pkg/api"
+	"github.com/autom8ter/morpheus/pkg/auth"
+	"github.com/autom8ter/morpheus/pkg/dataloader"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/autom8ter/morpheus/pkg/graph/generated"
 	"github.com/autom8ter/morpheus/pkg/graph/model"
 	"github.com/autom8ter/morpheus/pkg/raft/fsm"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"github.com/spf13/cast"
 	"sort"
 )
 
 func (r *mutationResolver) Add(ctx context.Context, typeArg string, properties map[string]interface{}) (*model.Node, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return nil, errors.Errorf("authorization failed: readonly user")
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
@@ -45,6 +51,9 @@ func (r *mutationResolver) Add(ctx context.Context, typeArg string, properties m
 }
 
 func (r *mutationResolver) Set(ctx context.Context, typeArg string, id string, properties map[string]interface{}) (*model.Node, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return nil, errors.Errorf("authorization failed: readonly user")
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
@@ -72,6 +81,9 @@ func (r *mutationResolver) Set(ctx context.Context, typeArg string, id string, p
 }
 
 func (r *mutationResolver) Del(ctx context.Context, key model.Key) (bool, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return false, errors.Errorf("authorization failed: readonly user")
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
@@ -100,24 +112,35 @@ func (r *mutationResolver) Del(ctx context.Context, key model.Key) (bool, error)
 func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[string]interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	n, err := r.graph.GetNode(obj.Type, obj.ID)
+	val, err := dataloader.For(ctx).NodeByID.Load(dataloader.ID(obj.Type, obj.ID))
 	if err != nil {
 		return nil, err
 	}
+	if val == nil {
+		return nil, errors.New("failed to find node")
+	}
+	n := *val
 	return n.Properties(), nil
 }
 
 func (r *nodeResolver) GetProperty(ctx context.Context, obj *model.Node, key string) (interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	n, err := r.graph.GetNode(obj.Type, obj.ID)
+	val, err := dataloader.For(ctx).NodeByID.Load(dataloader.ID(obj.Type, obj.ID))
 	if err != nil {
 		return nil, err
 	}
+	if val == nil {
+		return nil, errors.New("failed to find node")
+	}
+	n := *val
 	return n.GetProperty(key), nil
 }
 
 func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, properties map[string]interface{}) (bool, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return false, errors.Errorf("authorization failed: readonly user")
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
@@ -147,10 +170,14 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, id string) (*model.Relationship, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	n, err := r.graph.GetNode(obj.Type, obj.ID)
+	val, err := dataloader.For(ctx).NodeByID.Load(dataloader.ID(obj.Type, obj.ID))
 	if err != nil {
 		return nil, err
 	}
+	if val == nil {
+		return nil, errors.New("failed to find node")
+	}
+	n := *val
 	rel, ok := n.GetRelationship(api.Direction(direction), relationship, id)
 	if !ok {
 		return nil, fmt.Errorf("not found")
@@ -159,6 +186,9 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, dir
 }
 
 func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, nodeKey model.Key) (*model.Relationship, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return nil, errors.Errorf("authorization failed: readonly user")
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
@@ -190,6 +220,9 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, dir
 }
 
 func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, direction model.Direction, key model.Key) (bool, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return false, errors.Errorf("authorization failed: readonly user")
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
@@ -221,10 +254,14 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, dir
 func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direction model.Direction, typeArg string, filter *model.Filter) (*model.Relationships, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	n, err := r.graph.GetNode(obj.Type, obj.ID)
+	val, err := dataloader.For(ctx).NodeByID.Load(dataloader.ID(obj.Type, obj.ID))
 	if err != nil {
 		return nil, err
 	}
+	if val == nil {
+		return nil, errors.New("failed to find node")
+	}
+	n := *val
 	skip := 0
 	if filter.Cursor != nil {
 		skp, err := r.parseCursor(*filter.Cursor)
@@ -299,11 +336,15 @@ func (r *queryResolver) Types(ctx context.Context) ([]string, error) {
 func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	res, err := r.graph.GetNode(key.Type, key.ID)
+	val, err := dataloader.For(ctx).NodeByID.Load(dataloader.ID(key.Type, key.ID))
 	if err != nil {
 		return nil, err
 	}
-	return toNode(res), nil
+	if val == nil {
+		return nil, errors.New("failed to find node")
+	}
+	n := *val
+	return toNode(n), nil
 }
 
 func (r *queryResolver) List(ctx context.Context, typeArg string, filter model.Filter) (*model.Nodes, error) {
@@ -384,6 +425,7 @@ func (r *queryResolver) Size(ctx context.Context) (int, error) {
 func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	// TODO: fix
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
 		return nil, err
@@ -402,6 +444,9 @@ func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relat
 }
 
 func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Relationship, properties map[string]interface{}) (bool, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return false, errors.Errorf("authorization failed: readonly user")
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
