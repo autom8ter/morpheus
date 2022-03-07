@@ -227,16 +227,7 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 		return nil, err
 	}
 	var rels []*model.Relationship
-	var skip = 0
 	n.Relationships(api.Direction(direction), typeArg, func(relationship api.Relationship) bool {
-		if filter.Offset != nil && filter.Limit != nil && *filter.Offset**filter.Limit > skip {
-			skip++
-			return true
-		}
-		if filter.Limit != nil && len(rels) >= *filter.Limit {
-			return false
-		}
-
 		for _, exp := range filter.Expressions {
 			if !eval(exp, relationship) {
 				return true
@@ -277,6 +268,12 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 			}
 		}
 	}
+	if filter.Offset != nil && filter.Limit != nil && len(rels) > *filter.Limit {
+		if total := len(rels); total < *filter.Limit*(*filter.Offset+1) {
+			return rels[*filter.Limit**filter.Offset : total], nil
+		}
+		return rels[*filter.Limit**filter.Offset : *filter.Limit*(*filter.Offset+1)], nil
+	}
 	return rels, nil
 }
 
@@ -300,15 +297,7 @@ func (r *queryResolver) List(ctx context.Context, typeArg string, filter model.F
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var nodes []*model.Node
-	skip := 0
 	if err := r.graph.RangeNodes(typeArg, func(node api.Node) bool {
-		if filter.Offset != nil && filter.Limit != nil && *filter.Offset**filter.Limit > skip {
-			skip++
-			return true
-		}
-		if filter.Limit != nil && len(nodes) >= *filter.Limit {
-			return false
-		}
 		for _, exp := range filter.Expressions {
 			if !eval(exp, node) {
 				return true
@@ -350,6 +339,12 @@ func (r *queryResolver) List(ctx context.Context, typeArg string, filter model.F
 				})
 			}
 		}
+	}
+	if filter.Offset != nil && filter.Limit != nil && len(nodes) > *filter.Limit {
+		if total := len(nodes); total < *filter.Limit*(*filter.Offset+1) {
+			return nodes[*filter.Limit**filter.Offset : total], nil
+		}
+		return nodes[*filter.Limit**filter.Offset : *filter.Limit*(*filter.Offset+1)], nil
 	}
 	return nodes, nil
 }
