@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"github.com/autom8ter/morpheus/pkg/datastructure"
+	"sort"
 )
 
 type iEntity struct {
@@ -357,16 +358,35 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 			for k, _ := range nodes {
 				types = append(types, k)
 			}
+			sort.Strings(types)
 			return types
 		},
 		func(typee string, id string) (Relationship, error) {
-			return nil, nil
+			if relationships[typee] == nil {
+				return nil, fmt.Errorf("not found")
+			}
+			val, ok := relationships[typee].Get(id)
+			if !ok {
+				return nil, fmt.Errorf("not found")
+			}
+			return val.(Relationship), nil
 		},
 		func(skip int, typee string, fn func(relation Relationship) bool) error {
+			if nodes[typee] == nil {
+				return nil
+			}
+			relationships[typee].Range(skip, func(val interface{}) bool {
+				return fn(val.(Relationship))
+			})
 			return nil
 		},
 		func() []string {
-			return nil
+			var types []string
+			for k, _ := range relationships {
+				types = append(types, k)
+			}
+			sort.Strings(types)
+			return types
 		},
 		func() int {
 			size := 0

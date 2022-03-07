@@ -47,9 +47,12 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	Mutation struct {
-		Add func(childComplexity int, typeArg string, properties map[string]interface{}) int
-		Del func(childComplexity int, key model.Key) int
-		Set func(childComplexity int, typeArg string, id string, properties map[string]interface{}) int
+		Add     func(childComplexity int, add model.AddNode) int
+		BulkAdd func(childComplexity int, add []*model.AddNode) int
+		BulkDel func(childComplexity int, del []*model.Key) int
+		BulkSet func(childComplexity int, set []*model.SetNode) int
+		Del     func(childComplexity int, del model.Key) int
+		Set     func(childComplexity int, set model.SetNode) int
 	}
 
 	Node struct {
@@ -60,7 +63,7 @@ type ComplexityRoot struct {
 		GetRelationship func(childComplexity int, direction model.Direction, relationship string, id string) int
 		ID              func(childComplexity int) int
 		Properties      func(childComplexity int) int
-		Relationships   func(childComplexity int, direction model.Direction, typeArg string, filter *model.Filter) int
+		Relationships   func(childComplexity int, direction model.Direction, filter *model.Filter) int
 		SetProperties   func(childComplexity int, properties map[string]interface{}) int
 		Type            func(childComplexity int) int
 	}
@@ -72,7 +75,7 @@ type ComplexityRoot struct {
 
 	Query struct {
 		Get   func(childComplexity int, key model.Key) int
-		List  func(childComplexity int, typeArg string, filter model.Filter) int
+		List  func(childComplexity int, filter model.Filter) int
 		Size  func(childComplexity int) int
 		Types func(childComplexity int) int
 	}
@@ -95,9 +98,12 @@ type ComplexityRoot struct {
 }
 
 type MutationResolver interface {
-	Add(ctx context.Context, typeArg string, properties map[string]interface{}) (*model.Node, error)
-	Set(ctx context.Context, typeArg string, id string, properties map[string]interface{}) (*model.Node, error)
-	Del(ctx context.Context, key model.Key) (bool, error)
+	Add(ctx context.Context, add model.AddNode) (*model.Node, error)
+	Set(ctx context.Context, set model.SetNode) (*model.Node, error)
+	Del(ctx context.Context, del model.Key) (bool, error)
+	BulkAdd(ctx context.Context, add []*model.AddNode) (bool, error)
+	BulkSet(ctx context.Context, set []*model.SetNode) (bool, error)
+	BulkDel(ctx context.Context, del []*model.Key) (bool, error)
 }
 type NodeResolver interface {
 	Properties(ctx context.Context, obj *model.Node) (map[string]interface{}, error)
@@ -107,12 +113,12 @@ type NodeResolver interface {
 	GetRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, id string) (*model.Relationship, error)
 	AddRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, nodeKey model.Key) (*model.Relationship, error)
 	DelRelationship(ctx context.Context, obj *model.Node, direction model.Direction, key model.Key) (bool, error)
-	Relationships(ctx context.Context, obj *model.Node, direction model.Direction, typeArg string, filter *model.Filter) (*model.Relationships, error)
+	Relationships(ctx context.Context, obj *model.Node, direction model.Direction, filter *model.Filter) (*model.Relationships, error)
 }
 type QueryResolver interface {
 	Types(ctx context.Context) ([]string, error)
 	Get(ctx context.Context, key model.Key) (*model.Node, error)
-	List(ctx context.Context, typeArg string, filter model.Filter) (*model.Nodes, error)
+	List(ctx context.Context, filter model.Filter) (*model.Nodes, error)
 	Size(ctx context.Context) (int, error)
 }
 type RelationshipResolver interface {
@@ -146,7 +152,43 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.Add(childComplexity, args["type"].(string), args["properties"].(map[string]interface{})), true
+		return e.complexity.Mutation.Add(childComplexity, args["add"].(model.AddNode)), true
+
+	case "Mutation.bulkAdd":
+		if e.complexity.Mutation.BulkAdd == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_bulkAdd_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.BulkAdd(childComplexity, args["add"].([]*model.AddNode)), true
+
+	case "Mutation.bulkDel":
+		if e.complexity.Mutation.BulkDel == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_bulkDel_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.BulkDel(childComplexity, args["del"].([]*model.Key)), true
+
+	case "Mutation.bulkSet":
+		if e.complexity.Mutation.BulkSet == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_bulkSet_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.BulkSet(childComplexity, args["set"].([]*model.SetNode)), true
 
 	case "Mutation.del":
 		if e.complexity.Mutation.Del == nil {
@@ -158,7 +200,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.Del(childComplexity, args["key"].(model.Key)), true
+		return e.complexity.Mutation.Del(childComplexity, args["del"].(model.Key)), true
 
 	case "Mutation.set":
 		if e.complexity.Mutation.Set == nil {
@@ -170,7 +212,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.Set(childComplexity, args["type"].(string), args["id"].(string), args["properties"].(map[string]interface{})), true
+		return e.complexity.Mutation.Set(childComplexity, args["set"].(model.SetNode)), true
 
 	case "Node.addRelationship":
 		if e.complexity.Node.AddRelationship == nil {
@@ -256,7 +298,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Node.Relationships(childComplexity, args["direction"].(model.Direction), args["type"].(string), args["filter"].(*model.Filter)), true
+		return e.complexity.Node.Relationships(childComplexity, args["direction"].(model.Direction), args["filter"].(*model.Filter)), true
 
 	case "Node.setProperties":
 		if e.complexity.Node.SetProperties == nil {
@@ -313,7 +355,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.List(childComplexity, args["type"].(string), args["filter"].(model.Filter)), true
+		return e.complexity.Query.List(childComplexity, args["filter"].(model.Filter)), true
 
 	case "Query.size":
 		if e.complexity.Query.Size == nil {
@@ -507,6 +549,7 @@ input Expression {
 
 input Filter {
   cursor: String
+  type: String!
   expressions: [Expression!]
   page_size: Int
   order_by: OrderBy
@@ -541,7 +584,7 @@ type Node implements Entity {
   getRelationship(direction: Direction!, relationship: String!, id: String!): Relationship!
   addRelationship(direction: Direction!, relationship: String!, nodeKey: Key!): Relationship!
   delRelationship(direction: Direction!, key: Key!): Boolean!
-  relationships(direction: Direction!, type: String!, filter: Filter): Relationships!
+  relationships(direction: Direction!, filter: Filter): Relationships!
 }
 
 type Relationship implements Entity {
@@ -565,17 +608,32 @@ type Nodes {
   nodes: [Node!]
 }
 
+input AddNode {
+  type: String!
+  id: String
+  properties: Map
+}
+
+input SetNode {
+  type: String!
+  id: String!
+  properties: Map
+}
+
 type Query {
   types: [String!]
   get(key: Key!): Node!
-  list(type: String!, filter: Filter!): Nodes!
+  list(filter: Filter!): Nodes!
   size: Int!
 }
 
 type Mutation {
-  add(type: String!, properties: Map): Node!
-  set(type: String!, id: String!, properties: Map): Node!
-  del(key: Key!): Boolean!
+  add(add: AddNode!): Node!
+  set(set: SetNode!): Node!
+  del(del: Key!): Boolean!
+  bulkAdd(add: [AddNode!]): Boolean!
+  bulkSet(set: [SetNode!]): Boolean!
+  bulkDel(del: [Key!]): Boolean!
 }
 `, BuiltIn: false},
 }
@@ -588,24 +646,60 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 func (ec *executionContext) field_Mutation_add_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 string
-	if tmp, ok := rawArgs["type"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+	var arg0 model.AddNode
+	if tmp, ok := rawArgs["add"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("add"))
+		arg0, err = ec.unmarshalNAddNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["type"] = arg0
-	var arg1 map[string]interface{}
-	if tmp, ok := rawArgs["properties"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("properties"))
-		arg1, err = ec.unmarshalOMap2map(ctx, tmp)
+	args["add"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_bulkAdd_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 []*model.AddNode
+	if tmp, ok := rawArgs["add"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("add"))
+		arg0, err = ec.unmarshalOAddNode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNodeᚄ(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["properties"] = arg1
+	args["add"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_bulkDel_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 []*model.Key
+	if tmp, ok := rawArgs["del"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("del"))
+		arg0, err = ec.unmarshalOKey2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKeyᚄ(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["del"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_bulkSet_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 []*model.SetNode
+	if tmp, ok := rawArgs["set"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("set"))
+		arg0, err = ec.unmarshalOSetNode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNodeᚄ(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["set"] = arg0
 	return args, nil
 }
 
@@ -613,47 +707,29 @@ func (ec *executionContext) field_Mutation_del_args(ctx context.Context, rawArgs
 	var err error
 	args := map[string]interface{}{}
 	var arg0 model.Key
-	if tmp, ok := rawArgs["key"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
+	if tmp, ok := rawArgs["del"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("del"))
 		arg0, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["key"] = arg0
+	args["del"] = arg0
 	return args, nil
 }
 
 func (ec *executionContext) field_Mutation_set_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 string
-	if tmp, ok := rawArgs["type"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+	var arg0 model.SetNode
+	if tmp, ok := rawArgs["set"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("set"))
+		arg0, err = ec.unmarshalNSetNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNode(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["type"] = arg0
-	var arg1 string
-	if tmp, ok := rawArgs["id"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
-		arg1, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["id"] = arg1
-	var arg2 map[string]interface{}
-	if tmp, ok := rawArgs["properties"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("properties"))
-		arg2, err = ec.unmarshalOMap2map(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["properties"] = arg2
+	args["set"] = arg0
 	return args, nil
 }
 
@@ -789,24 +865,15 @@ func (ec *executionContext) field_Node_relationships_args(ctx context.Context, r
 		}
 	}
 	args["direction"] = arg0
-	var arg1 string
-	if tmp, ok := rawArgs["type"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
-		arg1, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["type"] = arg1
-	var arg2 *model.Filter
+	var arg1 *model.Filter
 	if tmp, ok := rawArgs["filter"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
-		arg2, err = ec.unmarshalOFilter2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐFilter(ctx, tmp)
+		arg1, err = ec.unmarshalOFilter2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐFilter(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["filter"] = arg2
+	args["filter"] = arg1
 	return args, nil
 }
 
@@ -858,24 +925,15 @@ func (ec *executionContext) field_Query_get_args(ctx context.Context, rawArgs ma
 func (ec *executionContext) field_Query_list_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 string
-	if tmp, ok := rawArgs["type"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["type"] = arg0
-	var arg1 model.Filter
+	var arg0 model.Filter
 	if tmp, ok := rawArgs["filter"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
-		arg1, err = ec.unmarshalNFilter2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐFilter(ctx, tmp)
+		arg0, err = ec.unmarshalNFilter2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐFilter(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["filter"] = arg1
+	args["filter"] = arg0
 	return args, nil
 }
 
@@ -987,7 +1045,7 @@ func (ec *executionContext) _Mutation_add(ctx context.Context, field graphql.Col
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().Add(rctx, args["type"].(string), args["properties"].(map[string]interface{}))
+		return ec.resolvers.Mutation().Add(rctx, args["add"].(model.AddNode))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1029,7 +1087,7 @@ func (ec *executionContext) _Mutation_set(ctx context.Context, field graphql.Col
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().Set(rctx, args["type"].(string), args["id"].(string), args["properties"].(map[string]interface{}))
+		return ec.resolvers.Mutation().Set(rctx, args["set"].(model.SetNode))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1071,7 +1129,133 @@ func (ec *executionContext) _Mutation_del(ctx context.Context, field graphql.Col
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().Del(rctx, args["key"].(model.Key))
+		return ec.resolvers.Mutation().Del(rctx, args["del"].(model.Key))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Mutation_bulkAdd(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_bulkAdd_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().BulkAdd(rctx, args["add"].([]*model.AddNode))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Mutation_bulkSet(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_bulkSet_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().BulkSet(rctx, args["set"].([]*model.SetNode))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Mutation_bulkDel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_bulkDel_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().BulkDel(rctx, args["del"].([]*model.Key))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1467,7 +1651,7 @@ func (ec *executionContext) _Node_relationships(ctx context.Context, field graph
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Node().Relationships(rctx, obj, args["direction"].(model.Direction), args["type"].(string), args["filter"].(*model.Filter))
+		return ec.resolvers.Node().Relationships(rctx, obj, args["direction"].(model.Direction), args["filter"].(*model.Filter))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1650,7 +1834,7 @@ func (ec *executionContext) _Query_list(ctx context.Context, field graphql.Colle
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().List(rctx, args["type"].(string), args["filter"].(model.Filter))
+		return ec.resolvers.Query().List(rctx, args["filter"].(model.Filter))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3324,6 +3508,45 @@ func (ec *executionContext) ___Type_specifiedByURL(ctx context.Context, field gr
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputAddNode(ctx context.Context, obj interface{}) (model.AddNode, error) {
+	var it model.AddNode
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	for k, v := range asMap {
+		switch k {
+		case "type":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
+			it.Type, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "id":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+			it.ID, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "properties":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("properties"))
+			it.Properties, err = ec.unmarshalOMap2map(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputExpression(ctx context.Context, obj interface{}) (model.Expression, error) {
 	var it model.Expression
 	asMap := map[string]interface{}{}
@@ -3377,6 +3600,14 @@ func (ec *executionContext) unmarshalInputFilter(ctx context.Context, obj interf
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cursor"))
 			it.Cursor, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "type":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
+			it.Type, err = ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3472,6 +3703,45 @@ func (ec *executionContext) unmarshalInputOrderBy(ctx context.Context, obj inter
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputSetNode(ctx context.Context, obj interface{}) (model.SetNode, error) {
+	var it model.SetNode
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	for k, v := range asMap {
+		switch k {
+		case "type":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
+			it.Type, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "id":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+			it.ID, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "properties":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("properties"))
+			it.Properties, err = ec.unmarshalOMap2map(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
 // endregion **************************** input.gotpl *****************************
 
 // region    ************************** interface.gotpl ***************************
@@ -3545,6 +3815,36 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "del":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_del(ctx, field)
+			}
+
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "bulkAdd":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_bulkAdd(ctx, field)
+			}
+
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "bulkSet":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_bulkSet(ctx, field)
+			}
+
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "bulkDel":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_bulkDel(ctx, field)
 			}
 
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
@@ -4511,6 +4811,16 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 
 // region    ***************************** type.gotpl *****************************
 
+func (ec *executionContext) unmarshalNAddNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx context.Context, v interface{}) (model.AddNode, error) {
+	res, err := ec.unmarshalInputAddNode(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNAddNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx context.Context, v interface{}) (*model.AddNode, error) {
+	res, err := ec.unmarshalInputAddNode(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNAny2interface(ctx context.Context, v interface{}) (interface{}, error) {
 	res, err := graphql.UnmarshalAny(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -4585,6 +4895,11 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 func (ec *executionContext) unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx context.Context, v interface{}) (model.Key, error) {
 	res, err := ec.unmarshalInputKey(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNKey2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx context.Context, v interface{}) (*model.Key, error) {
+	res, err := ec.unmarshalInputKey(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNMap2map(ctx context.Context, v interface{}) (map[string]interface{}, error) {
@@ -4672,6 +4987,16 @@ func (ec *executionContext) marshalNRelationships2ᚖgithubᚗcomᚋautom8terᚋ
 		return graphql.Null
 	}
 	return ec._Relationships(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNSetNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNode(ctx context.Context, v interface{}) (model.SetNode, error) {
+	res, err := ec.unmarshalInputSetNode(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNSetNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNode(ctx context.Context, v interface{}) (*model.SetNode, error) {
+	res, err := ec.unmarshalInputSetNode(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNString2string(ctx context.Context, v interface{}) (string, error) {
@@ -4942,6 +5267,26 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	return res
 }
 
+func (ec *executionContext) unmarshalOAddNode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNodeᚄ(ctx context.Context, v interface{}) ([]*model.AddNode, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]*model.AddNode, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNAddNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
 func (ec *executionContext) unmarshalOAny2interface(ctx context.Context, v interface{}) (interface{}, error) {
 	if v == nil {
 		return nil, nil
@@ -5026,6 +5371,26 @@ func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.Sele
 	}
 	res := graphql.MarshalInt(*v)
 	return res
+}
+
+func (ec *executionContext) unmarshalOKey2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKeyᚄ(ctx context.Context, v interface{}) ([]*model.Key, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]*model.Key, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNKey2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
 }
 
 func (ec *executionContext) unmarshalOMap2map(ctx context.Context, v interface{}) (map[string]interface{}, error) {
@@ -5144,6 +5509,26 @@ func (ec *executionContext) marshalORelationship2ᚕᚖgithubᚗcomᚋautom8ter�
 	}
 
 	return ret
+}
+
+func (ec *executionContext) unmarshalOSetNode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNodeᚄ(ctx context.Context, v interface{}) ([]*model.SetNode, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]*model.SetNode, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNSetNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNode(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
 }
 
 func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v interface{}) ([]string, error) {

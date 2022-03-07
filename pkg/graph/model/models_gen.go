@@ -12,6 +12,12 @@ type Entity interface {
 	IsEntity()
 }
 
+type AddNode struct {
+	Type       string                 `json:"type"`
+	ID         *string                `json:"id"`
+	Properties map[string]interface{} `json:"properties"`
+}
+
 type Expression struct {
 	Key      string      `json:"key"`
 	Operator Operator    `json:"operator"`
@@ -20,6 +26,7 @@ type Expression struct {
 
 type Filter struct {
 	Cursor      *string       `json:"cursor"`
+	Type        string        `json:"type"`
 	Expressions []*Expression `json:"expressions"`
 	PageSize    *int          `json:"page_size"`
 	OrderBy     *OrderBy      `json:"order_by"`
@@ -71,6 +78,12 @@ func (Relationship) IsEntity() {}
 type Relationships struct {
 	Cursor        string          `json:"cursor"`
 	Relationships []*Relationship `json:"relationships"`
+}
+
+type SetNode struct {
+	Type       string                 `json:"type"`
+	ID         string                 `json:"id"`
+	Properties map[string]interface{} `json:"properties"`
 }
 
 type Direction string

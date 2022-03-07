@@ -27,6 +27,7 @@ input Expression {
 
 input Filter {
   cursor: String
+  type: String!
   expressions: [Expression!]
   page_size: Int
   order_by: OrderBy
@@ -61,7 +62,7 @@ type Node implements Entity {
   getRelationship(direction: Direction!, relationship: String!, id: String!): Relationship!
   addRelationship(direction: Direction!, relationship: String!, nodeKey: Key!): Relationship!
   delRelationship(direction: Direction!, key: Key!): Boolean!
-  relationships(direction: Direction!, type: String!, filter: Filter): Relationships!
+  relationships(direction: Direction!, filter: Filter): Relationships!
 }
 
 type Relationship implements Entity {
@@ -85,15 +86,30 @@ type Nodes {
   nodes: [Node!]
 }
 
+input AddNode {
+  type: String!
+  id: String
+  properties: Map
+}
+
+input SetNode {
+  type: String!
+  id: String!
+  properties: Map
+}
+
 type Query {
   types: [String!]
   get(key: Key!): Node!
-  list(type: String!, filter: Filter!): Nodes!
+  list(filter: Filter!): Nodes!
   size: Int!
 }
 
 type Mutation {
-  add(type: String!, properties: Map): Node!
-  set(type: String!, id: String!, properties: Map): Node!
-  del(key: Key!): Boolean!
+  add(add: AddNode!): Node!
+  set(set: SetNode!): Node!
+  del(del: Key!): Boolean!
+  bulkAdd(add: [AddNode!]): Boolean!
+  bulkSet(set: [SetNode!]): Boolean!
+  bulkDel(del: [Key!]): Boolean!
 }

@@ -3,9 +3,8 @@
 - [x] implement pagination (limit/offset)
 - [x] readonly users
 - [x] dataloader to address n+1
+- [x] bulk add/set/delete
+
 - [ ] sessions for user interface
 - [ ] redirect traffic to raft leader
-- [ ] bulk add 
-- [ ] bulk set
-- [ ] bulk delete
 - [ ] custom disk storage implementation
