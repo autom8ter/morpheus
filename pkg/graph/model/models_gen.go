@@ -19,9 +19,9 @@ type Expression struct {
 }
 
 type Filter struct {
+	Cursor      *string       `json:"cursor"`
 	Expressions []*Expression `json:"expressions"`
 	PageSize    *int          `json:"page_size"`
-	Page        *int          `json:"page"`
 	OrderBy     *OrderBy      `json:"order_by"`
 }
 
@@ -40,10 +40,15 @@ type Node struct {
 	GetRelationship *Relationship          `json:"getRelationship"`
 	AddRelationship *Relationship          `json:"addRelationship"`
 	DelRelationship bool                   `json:"delRelationship"`
-	Relationships   []*Relationship        `json:"relationships"`
+	Relationships   *Relationships         `json:"relationships"`
 }
 
 func (Node) IsEntity() {}
+
+type Nodes struct {
+	Cursor string  `json:"cursor"`
+	Nodes  []*Node `json:"nodes"`
+}
 
 type OrderBy struct {
 	Field   string `json:"field"`
@@ -62,6 +67,11 @@ type Relationship struct {
 }
 
 func (Relationship) IsEntity() {}
+
+type Relationships struct {
+	Cursor        string          `json:"cursor"`
+	Relationships []*Relationship `json:"relationships"`
+}
 
 type Direction string
 

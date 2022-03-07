@@ -7,14 +7,13 @@ import (
 )
 
 type Resolver struct {
-	graph   api.Graph
-	raft    *raft.Raft
-	mu      *sync.RWMutex
-	cursors map[string]int
+	graph api.Graph
+	raft  *raft.Raft
+	mu    *sync.RWMutex
 }
 
 func NewResolver(graph api.Graph, r *raft.Raft) *Resolver {
-	return &Resolver{graph: graph, raft: r, mu: &sync.RWMutex{}, cursors: map[string]int{}}
+	return &Resolver{graph: graph, raft: r, mu: &sync.RWMutex{}}
 }
 
 func (r *Resolver) Close() error {

@@ -6,8 +6,6 @@ package graph
 import (
 	"context"
 	"fmt"
-	"sort"
-
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/autom8ter/morpheus/pkg/graph/generated"
@@ -15,6 +13,7 @@ import (
 	"github.com/autom8ter/morpheus/pkg/raft/fsm"
 	"github.com/google/uuid"
 	"github.com/spf13/cast"
+	"sort"
 )
 
 func (r *mutationResolver) Add(ctx context.Context, typeArg string, properties map[string]interface{}) (*model.Node, error) {
@@ -219,27 +218,32 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, dir
 	return true, nil
 }
 
-func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direction model.Direction, typeArg string, filter *model.Filter) ([]*model.Relationship, error) {
+func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direction model.Direction, typeArg string, filter *model.Filter) (*model.Relationships, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
 		return nil, err
 	}
+	skip := 0
+	if filter.Cursor != nil {
+		skp, err := r.parseCursor(*filter.Cursor)
+		if err != nil {
+			return nil, err
+		}
+		skip = skp
+	}
 
 	var rels []*model.Relationship
 	pageSize := 25
-	page := 0
 	if filter.PageSize != nil {
 		pageSize = *filter.PageSize
 	}
-	if filter.Page != nil {
-		page = *filter.Page
-	}
-	n.Relationships(page*pageSize, api.Direction(direction), typeArg, func(relationship api.Relationship) bool {
-		if len(rels) > pageSize {
+	n.Relationships(skip, api.Direction(direction), typeArg, func(relationship api.Relationship) bool {
+		if len(rels) >= pageSize {
 			return false
 		}
+		skip++
 		for _, exp := range filter.Expressions {
 			if !eval(exp, relationship) {
 				return true
@@ -280,7 +284,10 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 			}
 		}
 	}
-	return rels, nil
+	return &model.Relationships{
+		Cursor:        r.createCursor(skip),
+		Relationships: rels,
+	}, nil
 }
 
 func (r *queryResolver) Types(ctx context.Context) ([]string, error) {
@@ -299,22 +306,27 @@ func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, er
 	return toNode(res), nil
 }
 
-func (r *queryResolver) List(ctx context.Context, typeArg string, filter model.Filter) ([]*model.Node, error) {
+func (r *queryResolver) List(ctx context.Context, typeArg string, filter model.Filter) (*model.Nodes, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var nodes []*model.Node
 	limit := 25
-	offset := 0
+	skip := 0
+	if filter.Cursor != nil {
+		skp, err := r.parseCursor(*filter.Cursor)
+		if err != nil {
+			return nil, err
+		}
+		skip = skp
+	}
 	if filter.PageSize != nil {
 		limit = *filter.PageSize
 	}
-	if filter.Page != nil {
-		offset = *filter.Page
-	}
-	if err := r.graph.RangeNodes(offset*limit, typeArg, func(node api.Node) bool {
-		if len(nodes) > limit {
+	if err := r.graph.RangeNodes(skip, typeArg, func(node api.Node) bool {
+		if len(nodes) >= limit {
 			return false
 		}
+		skip++
 		for _, exp := range filter.Expressions {
 			if !eval(exp, node) {
 				return true
@@ -357,7 +369,10 @@ func (r *queryResolver) List(ctx context.Context, typeArg string, filter model.F
 			}
 		}
 	}
-	return nodes, nil
+	return &model.Nodes{
+		Cursor: r.createCursor(skip),
+		Nodes:  nodes,
+	}, nil
 }
 
 func (r *queryResolver) Size(ctx context.Context) (int, error) {

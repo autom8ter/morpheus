@@ -1,9 +1,12 @@
 package graph
 
 import (
+	"encoding/base64"
+	"fmt"
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/graph/model"
 	"github.com/spf13/cast"
+	"strconv"
 	"strings"
 )
 
@@ -49,4 +52,20 @@ func toRelationship(rel api.Relationship) *model.Relationship {
 		Source: toNode(rel.Source()),
 		Target: toNode(rel.Target()),
 	}
+}
+func (r *Resolver) parseCursor(cursor string) (int, error) {
+	bits, err := base64.StdEncoding.DecodeString(cursor)
+	if err != nil {
+		return 0, err
+	}
+	split := strings.Split(string(bits), "cursor-")
+	if len(split) < 2 {
+		return 0, fmt.Errorf("bad cursor")
+	}
+	return strconv.Atoi(split[1])
+}
+func (r *Resolver) createCursor(skip int) string {
+	cursor := fmt.Sprintf("cursor-%v", skip)
+	str := base64.StdEncoding.EncodeToString([]byte(cursor))
+	return str
 }

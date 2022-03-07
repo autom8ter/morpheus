@@ -65,6 +65,11 @@ type ComplexityRoot struct {
 		Type            func(childComplexity int) int
 	}
 
+	Nodes struct {
+		Cursor func(childComplexity int) int
+		Nodes  func(childComplexity int) int
+	}
+
 	Query struct {
 		Get   func(childComplexity int, key model.Key) int
 		List  func(childComplexity int, typeArg string, filter model.Filter) int
@@ -82,6 +87,11 @@ type ComplexityRoot struct {
 		Target        func(childComplexity int) int
 		Type          func(childComplexity int) int
 	}
+
+	Relationships struct {
+		Cursor        func(childComplexity int) int
+		Relationships func(childComplexity int) int
+	}
 }
 
 type MutationResolver interface {
@@ -97,12 +107,12 @@ type NodeResolver interface {
 	GetRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, id string) (*model.Relationship, error)
 	AddRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, nodeKey model.Key) (*model.Relationship, error)
 	DelRelationship(ctx context.Context, obj *model.Node, direction model.Direction, key model.Key) (bool, error)
-	Relationships(ctx context.Context, obj *model.Node, direction model.Direction, typeArg string, filter *model.Filter) ([]*model.Relationship, error)
+	Relationships(ctx context.Context, obj *model.Node, direction model.Direction, typeArg string, filter *model.Filter) (*model.Relationships, error)
 }
 type QueryResolver interface {
 	Types(ctx context.Context) ([]string, error)
 	Get(ctx context.Context, key model.Key) (*model.Node, error)
-	List(ctx context.Context, typeArg string, filter model.Filter) ([]*model.Node, error)
+	List(ctx context.Context, typeArg string, filter model.Filter) (*model.Nodes, error)
 	Size(ctx context.Context) (int, error)
 }
 type RelationshipResolver interface {
@@ -267,6 +277,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Node.Type(childComplexity), true
 
+	case "Nodes.cursor":
+		if e.complexity.Nodes.Cursor == nil {
+			break
+		}
+
+		return e.complexity.Nodes.Cursor(childComplexity), true
+
+	case "Nodes.nodes":
+		if e.complexity.Nodes.Nodes == nil {
+			break
+		}
+
+		return e.complexity.Nodes.Nodes(childComplexity), true
+
 	case "Query.get":
 		if e.complexity.Query.Get == nil {
 			break
@@ -376,6 +400,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Relationship.Type(childComplexity), true
 
+	case "Relationships.cursor":
+		if e.complexity.Relationships.Cursor == nil {
+			break
+		}
+
+		return e.complexity.Relationships.Cursor(childComplexity), true
+
+	case "Relationships.relationships":
+		if e.complexity.Relationships.Relationships == nil {
+			break
+		}
+
+		return e.complexity.Relationships.Relationships(childComplexity), true
+
 	}
 	return 0, false
 }
@@ -468,9 +506,9 @@ input Expression {
 }
 
 input Filter {
+  cursor: String
   expressions: [Expression!]
   page_size: Int
-  page: Int
   order_by: OrderBy
 }
 
@@ -503,7 +541,7 @@ type Node implements Entity {
   getRelationship(direction: Direction!, relationship: String!, id: String!): Relationship!
   addRelationship(direction: Direction!, relationship: String!, nodeKey: Key!): Relationship!
   delRelationship(direction: Direction!, key: Key!): Boolean!
-  relationships(direction: Direction!, type: String!, filter: Filter): [Relationship!]
+  relationships(direction: Direction!, type: String!, filter: Filter): Relationships!
 }
 
 type Relationship implements Entity {
@@ -517,10 +555,20 @@ type Relationship implements Entity {
   target: Node!
 }
 
+type Relationships {
+  cursor: String!
+  relationships: [Relationship!]
+}
+
+type Nodes {
+  cursor: String!
+  nodes: [Node!]
+}
+
 type Query {
   types: [String!]
   get(key: Key!): Node!
-  list(type: String!, filter: Filter!): [Node!]
+  list(type: String!, filter: Filter!): Nodes!
   size: Int!
 }
 
@@ -1426,11 +1474,81 @@ func (ec *executionContext) _Node_relationships(ctx context.Context, field graph
 		return graphql.Null
 	}
 	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
 		return graphql.Null
 	}
-	res := resTmp.([]*model.Relationship)
+	res := resTmp.(*model.Relationships)
 	fc.Result = res
-	return ec.marshalORelationship2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationshipᚄ(ctx, field.Selections, res)
+	return ec.marshalNRelationships2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationships(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Nodes_cursor(ctx context.Context, field graphql.CollectedField, obj *model.Nodes) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Nodes",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Cursor, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Nodes_nodes(ctx context.Context, field graphql.CollectedField, obj *model.Nodes) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Nodes",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Nodes, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]*model.Node)
+	fc.Result = res
+	return ec.marshalONode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodeᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_types(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -1539,11 +1657,14 @@ func (ec *executionContext) _Query_list(ctx context.Context, field graphql.Colle
 		return graphql.Null
 	}
 	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
 		return graphql.Null
 	}
-	res := resTmp.([]*model.Node)
+	res := resTmp.(*model.Nodes)
 	fc.Result = res
-	return ec.marshalONode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodeᚄ(ctx, field.Selections, res)
+	return ec.marshalNNodes2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodes(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_size(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -1948,6 +2069,73 @@ func (ec *executionContext) _Relationship_target(ctx context.Context, field grap
 	res := resTmp.(*model.Node)
 	fc.Result = res
 	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Relationships_cursor(ctx context.Context, field graphql.CollectedField, obj *model.Relationships) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Relationships",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Cursor, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Relationships_relationships(ctx context.Context, field graphql.CollectedField, obj *model.Relationships) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Relationships",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Relationships, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]*model.Relationship)
+	fc.Result = res
+	return ec.marshalORelationship2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationshipᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
@@ -3184,6 +3372,14 @@ func (ec *executionContext) unmarshalInputFilter(ctx context.Context, obj interf
 
 	for k, v := range asMap {
 		switch k {
+		case "cursor":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cursor"))
+			it.Cursor, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
 		case "expressions":
 			var err error
 
@@ -3197,14 +3393,6 @@ func (ec *executionContext) unmarshalInputFilter(ctx context.Context, obj interf
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("page_size"))
 			it.PageSize, err = ec.unmarshalOInt2ᚖint(ctx, v)
-			if err != nil {
-				return it, err
-			}
-		case "page":
-			var err error
-
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("page"))
-			it.Page, err = ec.unmarshalOInt2ᚖint(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3542,6 +3730,9 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 					}
 				}()
 				res = ec._Node_relationships(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
 				return res
 			}
 
@@ -3549,6 +3740,44 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 				return innerFunc(ctx)
 
 			})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var nodesImplementors = []string{"Nodes"}
+
+func (ec *executionContext) _Nodes(ctx context.Context, sel ast.SelectionSet, obj *model.Nodes) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, nodesImplementors)
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Nodes")
+		case "cursor":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Nodes_cursor(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "nodes":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Nodes_nodes(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -3632,6 +3861,9 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_list(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
 				return res
 			}
 
@@ -3807,6 +4039,44 @@ func (ec *executionContext) _Relationship(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&invalids, 1)
 			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var relationshipsImplementors = []string{"Relationships"}
+
+func (ec *executionContext) _Relationships(ctx context.Context, sel ast.SelectionSet, obj *model.Relationships) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, relationshipsImplementors)
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Relationships")
+		case "cursor":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Relationships_cursor(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "relationships":
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Relationships_relationships(ctx, field, obj)
+			}
+
+			out.Values[i] = innerFunc(ctx)
+
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -4352,6 +4622,20 @@ func (ec *executionContext) marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheus�
 	return ec._Node(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNNodes2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodes(ctx context.Context, sel ast.SelectionSet, v model.Nodes) graphql.Marshaler {
+	return ec._Nodes(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNNodes2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodes(ctx context.Context, sel ast.SelectionSet, v *model.Nodes) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Nodes(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNOperator2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐOperator(ctx context.Context, v interface{}) (model.Operator, error) {
 	var res model.Operator
 	err := res.UnmarshalGQL(v)
@@ -4374,6 +4658,20 @@ func (ec *executionContext) marshalNRelationship2ᚖgithubᚗcomᚋautom8terᚋm
 		return graphql.Null
 	}
 	return ec._Relationship(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNRelationships2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationships(ctx context.Context, sel ast.SelectionSet, v model.Relationships) graphql.Marshaler {
+	return ec._Relationships(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNRelationships2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationships(ctx context.Context, sel ast.SelectionSet, v *model.Relationships) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Relationships(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNString2string(ctx context.Context, v interface{}) (string, error) {

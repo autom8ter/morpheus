@@ -26,9 +26,9 @@ input Expression {
 }
 
 input Filter {
+  cursor: String
   expressions: [Expression!]
   page_size: Int
-  page: Int
   order_by: OrderBy
 }
 
@@ -61,7 +61,7 @@ type Node implements Entity {
   getRelationship(direction: Direction!, relationship: String!, id: String!): Relationship!
   addRelationship(direction: Direction!, relationship: String!, nodeKey: Key!): Relationship!
   delRelationship(direction: Direction!, key: Key!): Boolean!
-  relationships(direction: Direction!, type: String!, filter: Filter): [Relationship!]
+  relationships(direction: Direction!, type: String!, filter: Filter): Relationships!
 }
 
 type Relationship implements Entity {
@@ -75,10 +75,20 @@ type Relationship implements Entity {
   target: Node!
 }
 
+type Relationships {
+  cursor: String!
+  relationships: [Relationship!]
+}
+
+type Nodes {
+  cursor: String!
+  nodes: [Node!]
+}
+
 type Query {
   types: [String!]
   get(key: Key!): Node!
-  list(type: String!, filter: Filter!): [Node!]
+  list(type: String!, filter: Filter!): Nodes!
   size: Int!
 }
 
