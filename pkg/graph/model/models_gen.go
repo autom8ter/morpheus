@@ -14,7 +14,7 @@ type Entity interface {
 
 type Expression struct {
 	Key      string      `json:"key"`
-	Operator string      `json:"operator"`
+	Operator Operator    `json:"operator"`
 	Value    interface{} `json:"value"`
 }
 
@@ -101,5 +101,60 @@ func (e *Direction) UnmarshalGQL(v interface{}) error {
 }
 
 func (e Direction) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type Operator string
+
+const (
+	OperatorEq        Operator = "EQ"
+	OperatorNeq       Operator = "NEQ"
+	OperatorGt        Operator = "GT"
+	OperatorLt        Operator = "LT"
+	OperatorGte       Operator = "GTE"
+	OperatorLte       Operator = "LTE"
+	OperatorContains  Operator = "CONTAINS"
+	OperatorHasPrefix Operator = "HAS_PREFIX"
+	OperatorHasSuffix Operator = "HAS_SUFFIX"
+)
+
+var AllOperator = []Operator{
+	OperatorEq,
+	OperatorNeq,
+	OperatorGt,
+	OperatorLt,
+	OperatorGte,
+	OperatorLte,
+	OperatorContains,
+	OperatorHasPrefix,
+	OperatorHasSuffix,
+}
+
+func (e Operator) IsValid() bool {
+	switch e {
+	case OperatorEq, OperatorNeq, OperatorGt, OperatorLt, OperatorGte, OperatorLte, OperatorContains, OperatorHasPrefix, OperatorHasSuffix:
+		return true
+	}
+	return false
+}
+
+func (e Operator) String() string {
+	return string(e)
+}
+
+func (e *Operator) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = Operator(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid Operator", str)
+	}
+	return nil
+}
+
+func (e Operator) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }

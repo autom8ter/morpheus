@@ -227,8 +227,13 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 		return nil, err
 	}
 	var rels []*model.Relationship
+	var skip = 0
 	n.Relationships(api.Direction(direction), typeArg, func(relationship api.Relationship) bool {
-		if filter.Limit != nil && len(rels) > *filter.Limit {
+		if filter.Offset != nil && *filter.Offset > skip {
+			skip++
+			return true
+		}
+		if filter.Limit != nil && len(rels) >= *filter.Limit {
 			return false
 		}
 
@@ -260,7 +265,7 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 			return cast.ToString(rels[i].Properties[filter.OrderBy.Field]) > cast.ToString(rels[j].Properties[filter.OrderBy.Field])
 		})
 	} else {
-		if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+		if filter.OrderBy != nil && filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
 			sort.Slice(rels, func(i, j int) bool {
 				return rels[i].ID < rels[j].ID
 			})
@@ -294,8 +299,13 @@ func (r *queryResolver) List(ctx context.Context, typeArg string, filter model.F
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var nodes []*model.Node
+	skip := 0
 	if err := r.graph.RangeNodes(typeArg, func(node api.Node) bool {
-		if filter.Limit != nil && len(nodes) > *filter.Limit {
+		if filter.Offset != nil && *filter.Offset > skip {
+			skip++
+			return true
+		}
+		if filter.Limit != nil && len(nodes) >= *filter.Limit {
 			return false
 		}
 		for _, exp := range filter.Expressions {
@@ -328,7 +338,7 @@ func (r *queryResolver) List(ctx context.Context, typeArg string, filter model.F
 			return cast.ToString(nodes[i].Properties[filter.OrderBy.Field]) > cast.ToString(nodes[j].Properties[filter.OrderBy.Field])
 		})
 	} else {
-		if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+		if filter.OrderBy != nil && filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
 			sort.Slice(nodes, func(i, j int) bool {
 				return nodes[i].ID < nodes[j].ID
 			})

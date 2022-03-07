@@ -449,9 +449,21 @@ input Key {
   id: String!
 }
 
+enum Operator {
+  EQ
+  NEQ
+  GT
+  LT
+  GTE
+  LTE
+  CONTAINS
+  HAS_PREFIX
+  HAS_SUFFIX
+}
+
 input Expression {
   key: String!
-  operator: String!
+  operator: Operator!
   value: Any!
 }
 
@@ -3146,7 +3158,7 @@ func (ec *executionContext) unmarshalInputExpression(ctx context.Context, obj in
 			var err error
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("operator"))
-			it.Operator, err = ec.unmarshalNString2string(ctx, v)
+			it.Operator, err = ec.unmarshalNOperator2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐOperator(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -4339,6 +4351,16 @@ func (ec *executionContext) marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheus�
 		return graphql.Null
 	}
 	return ec._Node(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNOperator2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐOperator(ctx context.Context, v interface{}) (model.Operator, error) {
+	var res model.Operator
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNOperator2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐOperator(ctx context.Context, sel ast.SelectionSet, v model.Operator) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) marshalNRelationship2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationship(ctx context.Context, sel ast.SelectionSet, v model.Relationship) graphql.Marshaler {

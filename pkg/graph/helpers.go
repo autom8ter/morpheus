@@ -10,12 +10,24 @@ import (
 func eval(exp *model.Expression, ent api.Entity) bool {
 	val := ent.GetProperty(exp.Key)
 	switch exp.Operator {
-	case "==":
+	case model.OperatorEq:
 		return val == exp.Value
-	case "!=":
+	case model.OperatorNeq:
 		return val != exp.Value
-	case "contains":
+	case model.OperatorGt:
+		return cast.ToFloat64(val) > cast.ToFloat64(exp.Value)
+	case model.OperatorLt:
+		return cast.ToFloat64(val) < cast.ToFloat64(exp.Value)
+	case model.OperatorGte:
+		return cast.ToFloat64(val) >= cast.ToFloat64(exp.Value)
+	case model.OperatorLte:
+		return cast.ToFloat64(val) <= cast.ToFloat64(exp.Value)
+	case model.OperatorContains:
 		return strings.Contains(cast.ToString(val), cast.ToString(exp.Value))
+	case model.OperatorHasPrefix:
+		return strings.HasPrefix(cast.ToString(val), cast.ToString(exp.Value))
+	case model.OperatorHasSuffix:
+		return strings.HasSuffix(cast.ToString(val), cast.ToString(exp.Value))
 	}
 	return false
 }

@@ -7,9 +7,21 @@ input Key {
   id: String!
 }
 
+enum Operator {
+  EQ
+  NEQ
+  GT
+  LT
+  GTE
+  LTE
+  CONTAINS
+  HAS_PREFIX
+  HAS_SUFFIX
+}
+
 input Expression {
   key: String!
-  operator: String!
+  operator: Operator!
   value: Any!
 }
 

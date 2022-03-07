@@ -158,30 +158,29 @@ func (g graph) Close() error {
 }
 
 func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
-	nodes := map[string]map[string]Node{}
-	nodeRelationships := map[string]map[string]map[Direction]map[string]map[string]Relationship{}
+	nodes := map[string][]Node{}
+	nodeRelationships := map[string]map[string]map[Direction]map[string][]Relationship{}
 	return newGraph(
 		func(nodeType string, nodeID string) (Node, error) {
-			if nodes[nodeType] == nil {
-				return nil, fmt.Errorf("not found")
+			for _, node := range nodes[nodeType] {
+				if node.ID() == nodeID {
+					return node, nil
+				}
 			}
-			return nodes[nodeType][nodeID], nil
+			return nil, fmt.Errorf("not found")
 		},
 		func(nodeType string, nodeID string, properties map[string]interface{}) (Node, error) {
-			if nodes[nodeType] == nil {
-				nodes[nodeType] = map[string]Node{}
-			}
 			if nodeRelationships[nodeType] == nil {
-				nodeRelationships[nodeType] = map[string]map[Direction]map[string]map[string]Relationship{}
+				nodeRelationships[nodeType] = map[string]map[Direction]map[string][]Relationship{}
 			}
 			if nodeRelationships[nodeType][nodeID] == nil {
-				nodeRelationships[nodeType][nodeID] = map[Direction]map[string]map[string]Relationship{}
+				nodeRelationships[nodeType][nodeID] = map[Direction]map[string][]Relationship{}
 			}
 			if nodeRelationships[nodeType][nodeID][Outgoing] == nil {
-				nodeRelationships[nodeType][nodeID][Outgoing] = map[string]map[string]Relationship{}
+				nodeRelationships[nodeType][nodeID][Outgoing] = map[string][]Relationship{}
 			}
 			if nodeRelationships[nodeType][nodeID][Incoming] == nil {
-				nodeRelationships[nodeType][nodeID][Incoming] = map[string]map[string]Relationship{}
+				nodeRelationships[nodeType][nodeID][Incoming] = map[string][]Relationship{}
 			}
 			if properties == nil {
 				properties = map[string]interface{}{}
@@ -189,15 +188,17 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 			nodeEntity := entityFunc("1_", nodeType, nodeID, properties)
 			node := NewNode(
 				nodeEntity,
-				func(direction Direction, relation, id string) (Relationship, bool) {
+				func(direction Direction, relation, relationID string) (Relationship, bool) {
 					if nodeRelationships[nodeType][nodeID][direction] == nil {
 						return nil, false
 					}
 					if nodeRelationships[nodeType][nodeID][direction][relation] == nil {
 						return nil, false
 					}
-					if rel, ok := nodeRelationships[nodeType][nodeID][direction][relation][id]; ok {
-						return rel, true
+					for _, rel := range nodeRelationships[nodeType][nodeID][direction][relation] {
+						if rel.ID() == relationID {
+							return rel, true
+						}
 					}
 					return nil, false
 				},
@@ -206,7 +207,12 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 						entityFunc("2_", relation, relationshipID, map[string]interface{}{}),
 						func() Node {
 							if direction == Outgoing {
-								return nodes[nodeType][nodeID]
+								for _, node := range nodes[nodeType] {
+									if node.ID() == nodeID {
+										return node
+									}
+								}
+								return nil
 							}
 							return node
 						},
@@ -214,25 +220,20 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 							if direction == Outgoing {
 								return node
 							}
-							return nodes[nodeType][nodeID]
+							for _, node := range nodes[nodeType] {
+								if node.ID() == nodeID {
+									return node
+								}
+							}
+							return nil
 						},
 					)
-					if nodeRelationships[nodeType][nodeID][direction][relation] == nil {
-						nodeRelationships[nodeType][nodeID][direction][relation] = map[string]Relationship{}
-					}
-
-					nodeRelationships[nodeType][nodeID][direction][relation][relationshipID] = relationship
+					nodeRelationships[nodeType][nodeID][direction][relation] = append(nodeRelationships[nodeType][nodeID][direction][relation], relationship)
 
 					if direction == Outgoing {
-						if nodeRelationships[node.Type()][node.ID()][Incoming][relation] == nil {
-							nodeRelationships[node.Type()][node.ID()][Incoming][relation] = map[string]Relationship{}
-						}
-						nodeRelationships[node.Type()][node.ID()][Incoming][relation][relationshipID] = relationship
+						nodeRelationships[node.Type()][node.ID()][Incoming][relation] = append(nodeRelationships[node.Type()][node.ID()][Incoming][relation], relationship)
 					} else {
-						if nodeRelationships[node.Type()][node.ID()][Outgoing][relation] == nil {
-							nodeRelationships[node.Type()][node.ID()][Outgoing][relation] = map[string]Relationship{}
-						}
-						nodeRelationships[node.Type()][node.ID()][Outgoing][relation][relationshipID] = relationship
+						nodeRelationships[node.Type()][node.ID()][Outgoing][relation] = append(nodeRelationships[node.Type()][node.ID()][Outgoing][relation], relationship)
 					}
 					return relationship
 				},
@@ -249,7 +250,16 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 					if nodeRelationships[nodeType][nodeID][direction][relationship] == nil {
 						return
 					}
-					delete(nodeRelationships[nodeType][nodeID][direction][relationship], id)
+
+					for _, rel := range nodeRelationships[nodeType][nodeID][direction][relationship] {
+						if rel.ID() == id {
+							nodeRelationships[rel.Source().Type()][rel.Source().ID()][Outgoing][relationship] = removeRelationshipID(nodeRelationships[rel.Source().Type()][rel.Source().ID()][Outgoing][relationship], id)
+							nodeRelationships[rel.Source().Type()][rel.Source().ID()][Incoming][relationship] = removeRelationshipID(nodeRelationships[rel.Source().Type()][rel.Source().ID()][Incoming][relationship], id)
+
+							nodeRelationships[rel.Target().Type()][rel.Target().ID()][Outgoing][relationship] = removeRelationshipID(nodeRelationships[rel.Target().Type()][rel.Target().ID()][Outgoing][relationship], id)
+							nodeRelationships[rel.Target().Type()][rel.Target().ID()][Incoming][relationship] = removeRelationshipID(nodeRelationships[rel.Target().Type()][rel.Target().ID()][Incoming][relationship], id)
+						}
+					}
 				},
 				func(direction Direction, relation string, fn func(node Relationship) bool) {
 					if nodeRelationships[nodeType] == nil {
@@ -271,11 +281,13 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 					}
 				},
 			)
-			nodes[nodeType][nodeID] = node
+			nodes[nodeType] = append(nodes[nodeType], node)
 			return node, nil
 		},
-		func(nodeType string, id string) error {
-			delete(nodes[nodeType], id)
+		func(nodeType string, nodeID string) error {
+			nodes[nodeType] = removeNodeID(nodes[nodeType], nodeID)
+			delete(nodeRelationships[nodeType][nodeID], Outgoing)
+			delete(nodeRelationships[nodeType][nodeID], Incoming)
 			return nil
 		},
 		func(nodeType string, fn func(node Node) bool) error {
@@ -302,4 +314,22 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 		},
 		closer,
 	)
+}
+
+func removeRelationshipID(slice []Relationship, id string) []Relationship {
+	for i, element := range slice {
+		if element.ID() == id {
+			return append(slice[:i], slice[i+1:]...)
+		}
+	}
+	return slice
+}
+
+func removeNodeID(slice []Node, id string) []Node {
+	for i, element := range slice {
+		if element.ID() == id {
+			return append(slice[:i], slice[i+1:]...)
+		}
+	}
+	return slice
 }
