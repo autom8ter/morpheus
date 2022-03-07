@@ -27,8 +27,8 @@ input Expression {
 
 input Filter {
   expressions: [Expression!]
-  limit: Int
-  offset: Int
+  page_size: Int
+  page: Int
   order_by: OrderBy
 }
 
@@ -74,7 +74,6 @@ type Relationship implements Entity {
   source: Node!
   target: Node!
 }
-
 
 type Query {
   types: [String!]

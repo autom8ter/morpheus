@@ -24,7 +24,7 @@ type Node interface {
 	AddRelationship(direction Direction, relationship string, id string, node Node) Relationship
 	DelRelationship(direction Direction, relationship string, id string)
 	GetRelationship(direction Direction, relation, id string) (Relationship, bool)
-	Relationships(direction Direction, typee string, fn func(relationship Relationship) bool)
+	Relationships(skip int, direction Direction, typee string, fn func(relationship Relationship) bool)
 }
 
 type Relationship interface {
@@ -38,7 +38,7 @@ type Graph interface {
 	GetNode(typee string, id string) (Node, error)
 	AddNode(typee string, id string, properties map[string]interface{}) (Node, error)
 	DelNode(typee string, id string) error
-	RangeNodes(typee string, fn func(node Node) bool) error
+	RangeNodes(skip int, typee string, fn func(node Node) bool) error
 	NodeTypes() []string
 	Size() int
 	Close() error

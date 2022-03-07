@@ -226,8 +226,20 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 	if err != nil {
 		return nil, err
 	}
+
 	var rels []*model.Relationship
-	n.Relationships(api.Direction(direction), typeArg, func(relationship api.Relationship) bool {
+	pageSize := 25
+	page := 0
+	if filter.PageSize != nil {
+		pageSize = *filter.PageSize
+	}
+	if filter.Page != nil {
+		page = *filter.Page
+	}
+	n.Relationships(page*pageSize, api.Direction(direction), typeArg, func(relationship api.Relationship) bool {
+		if len(rels) > pageSize {
+			return false
+		}
 		for _, exp := range filter.Expressions {
 			if !eval(exp, relationship) {
 				return true
@@ -268,12 +280,6 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 			}
 		}
 	}
-	if filter.Offset != nil && filter.Limit != nil && len(rels) > *filter.Limit {
-		if total := len(rels); total < *filter.Limit*(*filter.Offset+1) {
-			return rels[*filter.Limit**filter.Offset : total], nil
-		}
-		return rels[*filter.Limit**filter.Offset : *filter.Limit*(*filter.Offset+1)], nil
-	}
 	return rels, nil
 }
 
@@ -297,7 +303,18 @@ func (r *queryResolver) List(ctx context.Context, typeArg string, filter model.F
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var nodes []*model.Node
-	if err := r.graph.RangeNodes(typeArg, func(node api.Node) bool {
+	limit := 25
+	offset := 0
+	if filter.PageSize != nil {
+		limit = *filter.PageSize
+	}
+	if filter.Page != nil {
+		offset = *filter.Page
+	}
+	if err := r.graph.RangeNodes(offset*limit, typeArg, func(node api.Node) bool {
+		if len(nodes) > limit {
+			return false
+		}
 		for _, exp := range filter.Expressions {
 			if !eval(exp, node) {
 				return true
@@ -339,12 +356,6 @@ func (r *queryResolver) List(ctx context.Context, typeArg string, filter model.F
 				})
 			}
 		}
-	}
-	if filter.Offset != nil && filter.Limit != nil && len(nodes) > *filter.Limit {
-		if total := len(nodes); total < *filter.Limit*(*filter.Offset+1) {
-			return nodes[*filter.Limit**filter.Offset : total], nil
-		}
-		return nodes[*filter.Limit**filter.Offset : *filter.Limit*(*filter.Offset+1)], nil
 	}
 	return nodes, nil
 }

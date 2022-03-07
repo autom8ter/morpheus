@@ -11,4 +11,7 @@ features:
 
 #auth:
 #  users:
-#    colemanw: 12345678
+#    colemanw:
+#     pw: 12345678
+#     readonly: true
+

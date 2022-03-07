@@ -20,8 +20,8 @@ type Expression struct {
 
 type Filter struct {
 	Expressions []*Expression `json:"expressions"`
-	Limit       *int          `json:"limit"`
-	Offset      *int          `json:"offset"`
+	PageSize    *int          `json:"page_size"`
+	Page        *int          `json:"page"`
 	OrderBy     *OrderBy      `json:"order_by"`
 }
 

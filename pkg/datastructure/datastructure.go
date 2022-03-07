@@ -2,7 +2,7 @@ package datastructure
 
 type OrderedMap interface {
 	Get(key string) (interface{}, bool)
-	Range(fn func(val interface{}) bool)
+	Range(skip int, fn func(val interface{}) bool)
 	Del(key string)
 	Add(key string, val interface{})
 	Len() int
@@ -46,8 +46,8 @@ func (o *orderedMap) Add(key string, val interface{}) {
 	o.values = append(o.values, val)
 }
 
-func (o *orderedMap) Range(fn func(val interface{}) bool) {
-	for _, val := range o.values {
+func (o *orderedMap) Range(skip int, fn func(val interface{}) bool) {
+	for _, val := range o.values[skip:] {
 		if !fn(val) {
 			break
 		}

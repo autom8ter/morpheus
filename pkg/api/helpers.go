@@ -81,14 +81,14 @@ type iNode struct {
 	getRel        func(direction Direction, relation, id string) (Relationship, bool)
 	addRel        func(direction Direction, relationship string, id string, node Node) Relationship
 	delRel        func(direction Direction, relationship string, id string)
-	relationships func(direction Direction, typee string, fn func(relationship Relationship) bool)
+	relationships func(skip int, direction Direction, typee string, fn func(relationship Relationship) bool)
 }
 
 func NewNode(entity Entity,
 	getRel func(direction Direction, relation, id string) (Relationship, bool),
 	addRel func(direction Direction, relationship string, id string, node Node) Relationship,
 	delRel func(direction Direction, relationship string, id string),
-	relationships func(direction Direction, typee string, fn func(relationship Relationship) bool)) Node {
+	relationships func(skip int, direction Direction, typee string, fn func(relationship Relationship) bool)) Node {
 	return &iNode{Entity: entity, getRel: getRel, addRel: addRel, delRel: delRel, relationships: relationships}
 }
 
@@ -104,15 +104,15 @@ func (i iNode) DelRelationship(direction Direction, relationship, id string) {
 	i.delRel(direction, relationship, id)
 }
 
-func (i iNode) Relationships(direction Direction, typee string, fn func(relationship Relationship) bool) {
-	i.relationships(direction, typee, fn)
+func (i iNode) Relationships(skip int, direction Direction, typee string, fn func(relationship Relationship) bool) {
+	i.relationships(skip, direction, typee, fn)
 }
 
 type graph struct {
 	getNode    func(typee string, id string) (Node, error)
 	addNode    func(typee string, id string, properties map[string]interface{}) (Node, error)
 	delNode    func(typee string, id string) error
-	rangeNodes func(typee string, fn func(node Node) bool) error
+	rangeNodes func(skip int, typee string, fn func(node Node) bool) error
 	nodeTypes  func() []string
 	size       func() int
 	closer     func() error
@@ -122,7 +122,7 @@ func newGraph(
 	getNode func(typee string, id string) (Node, error),
 	addNode func(typee string, id string, properties map[string]interface{}) (Node, error),
 	delNode func(typee string, id string) error,
-	rangeNodes func(typee string, fn func(node Node) bool) error,
+	rangeNodes func(skip int, typee string, fn func(node Node) bool) error,
 	nodeTypes func() []string,
 	size func() int,
 	closer func() error,
@@ -142,8 +142,8 @@ func (g graph) DelNode(typee string, id string) error {
 	return g.delNode(typee, id)
 }
 
-func (g graph) RangeNodes(typee string, fn func(node Node) bool) error {
-	return g.rangeNodes(typee, fn)
+func (g graph) RangeNodes(skip int, typee string, fn func(node Node) bool) error {
+	return g.rangeNodes(skip, typee, fn)
 }
 
 func (g graph) NodeTypes() []string {
@@ -265,7 +265,7 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 						nodeRelationships[rel.Target().Type()][rel.Target().ID()][Incoming][relationship].Del(id)
 					}
 				},
-				func(direction Direction, relation string, fn func(node Relationship) bool) {
+				func(skip int, direction Direction, relation string, fn func(node Relationship) bool) {
 					if nodeRelationships[nodeType] == nil {
 						return
 					}
@@ -278,7 +278,7 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 					if nodeRelationships[nodeType][nodeID][direction][relation] == nil {
 						return
 					}
-					nodeRelationships[nodeType][nodeID][direction][relation].Range(func(val interface{}) bool {
+					nodeRelationships[nodeType][nodeID][direction][relation].Range(skip, func(val interface{}) bool {
 						return fn(val.(Relationship))
 					})
 				},
@@ -289,7 +289,7 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 		func(nodeType string, nodeID string) error {
 			for _, types := range nodeRelationships[nodeType][nodeID] {
 				for relationship, values := range types {
-					values.Range(func(val interface{}) bool {
+					values.Range(0, func(val interface{}) bool {
 						rel := val.(Relationship)
 						nodeRelationships[rel.Source().Type()][rel.Source().ID()][Outgoing][relationship].Del(rel.ID())
 						nodeRelationships[rel.Source().Type()][rel.Source().ID()][Incoming][relationship].Del(rel.ID())
@@ -305,11 +305,11 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 			nodes[nodeType].Del(nodeID)
 			return nil
 		},
-		func(nodeType string, fn func(node Node) bool) error {
+		func(skip int, nodeType string, fn func(node Node) bool) error {
 			if nodes[nodeType] == nil {
 				return nil
 			}
-			nodes[nodeType].Range(func(val interface{}) bool {
+			nodes[nodeType].Range(skip, func(val interface{}) bool {
 				return fn(val.(Node))
 			})
 			return nil

@@ -27,7 +27,7 @@ func Test(t *testing.T) {
 	}
 	coleman.AddRelationship(api.Outgoing, "works_at", "1", choozle)
 
-	coleman.Relationships(api.Outgoing, "works_at", func(relationship api.Relationship) bool {
+	coleman.Relationships(0, api.Outgoing, "works_at", func(relationship api.Relationship) bool {
 		t.Logf("relationships - %s %s %s", coleman.GetProperty("name"), relationship.Type(), relationship.Target().ID())
 		return true
 	})
@@ -75,8 +75,8 @@ func Benchmark(b *testing.B) {
 	coleman.AddRelationship(api.Outgoing, "works_at", "1", choozle)
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		coleman.Relationships(api.Outgoing, "works_at", func(relationship api.Relationship) bool {
-			relationship.Target().Relationships(api.Incoming, "works_at", func(relationship2 api.Relationship) bool {
+		coleman.Relationships(0, api.Outgoing, "works_at", func(relationship api.Relationship) bool {
+			relationship.Target().Relationships(0, api.Incoming, "works_at", func(relationship2 api.Relationship) bool {
 				if relationship2.Source().GetProperty("name") != "Coleman Word" {
 					b.Fatal("fail - ", relationship2.Target().ID(), relationship2.Source().ID())
 				}

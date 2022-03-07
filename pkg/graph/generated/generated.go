@@ -469,8 +469,8 @@ input Expression {
 
 input Filter {
   expressions: [Expression!]
-  limit: Int
-  offset: Int
+  page_size: Int
+  page: Int
   order_by: OrderBy
 }
 
@@ -516,7 +516,6 @@ type Relationship implements Entity {
   source: Node!
   target: Node!
 }
-
 
 type Query {
   types: [String!]
@@ -3193,19 +3192,19 @@ func (ec *executionContext) unmarshalInputFilter(ctx context.Context, obj interf
 			if err != nil {
 				return it, err
 			}
-		case "limit":
+		case "page_size":
 			var err error
 
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("limit"))
-			it.Limit, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("page_size"))
+			it.PageSize, err = ec.unmarshalOInt2ᚖint(ctx, v)
 			if err != nil {
 				return it, err
 			}
-		case "offset":
+		case "page":
 			var err error
 
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("offset"))
-			it.Offset, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("page"))
+			it.Page, err = ec.unmarshalOInt2ᚖint(ctx, v)
 			if err != nil {
 				return it, err
 			}
