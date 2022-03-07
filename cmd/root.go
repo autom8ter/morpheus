@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"fmt"
-	"github.com/autom8ter/morpheus/pkg/logger"
+	"github.com/autom8ter/morpheus/pkg/config"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"os"
+	"log"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -20,22 +18,15 @@ func Execute() {
 	cobra.CheckErr(rootCmd.Execute())
 }
 
-var configFile = "./config.yaml"
+var (
+	configFile = "./config.yaml"
+	cfg        *config.Config
+)
 
 func init() {
-	homedir, _ := os.UserHomeDir()
-	viper.AutomaticEnv()
-	viper.SetDefault("server.graphql_port", 8080)
-	viper.SetDefault("server.raft_port", 7598)
-	viper.SetDefault("database.storage_path", fmt.Sprintf("%s/.morpheus", homedir))
-	viper.SetDefault("features.log_queries", false)
-	viper.SetDefault("features.introspection", false)
-	viper.SetDefault("features.apollo_tracing", false)
-	viper.SetDefault("server.raft_cluster", "")
-	viper.SetConfigFile(configFile)
-	if err := viper.ReadInConfig(); err != nil {
-		logger.L.Info("missing config file", map[string]interface{}{
-			"expected_path": configFile,
-		})
+	var err error
+	cfg, err = config.LoadConfig(configFile)
+	if err != nil {
+		log.Fatal(err)
 	}
 }

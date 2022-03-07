@@ -7,5 +7,5 @@
 - [ ] bulk add 
 - [ ] bulk set
 - [ ] bulk delete
-- [ ] TLS/SSL
+- [x] TLS/SSL
 
