@@ -70,7 +70,7 @@ goos: darwin
 goarch: amd64
 pkg: github.com/autom8ter/morpheus/pkg/storage
 cpu: Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz
-BenchmarkSetGetOneKey-16          121875              9142 ns/op            3500 B/op         29 allocs/op
+BenchmarkSetGetOneKey-16          6843098               172.0 ns/op           336 B/op          2 allocs/op
 */
 func BenchmarkSetGetOneKey(b *testing.B) {
 	d, err := ioutil.TempDir("", "bucket-test")
@@ -92,7 +92,6 @@ func BenchmarkSetGetOneKey(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-
 	}
 	//b.Cleanup(func() {
 	//	bucket.Close()

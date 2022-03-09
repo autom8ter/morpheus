@@ -30,11 +30,6 @@ type Bucket struct {
 	closed     *int64
 }
 
-type cachedItem struct {
-	timestamp time.Time
-	values    map[string]interface{}
-}
-
 func (s *Bucket) Get(key string) (map[string]interface{}, error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -114,47 +109,49 @@ func (b *Bucket) Close() error {
 func (b *Bucket) gc(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	tick := time.NewTicker(5 * time.Second)
+	tick := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-tick.C:
-			b.lock.Lock()
-			defer b.lock.Unlock()
-			for k, val := range b.cache {
-				buf := make([]byte, b.recordSize)
-				bits, err := json.Marshal(val)
-				if err != nil {
-					panic(stacktrace.Propagate(err, "failed to encode record"))
-				}
-				fmt.Println("DEBUG", k, string(bits))
-				for i, b := range bits {
-					buf[i] = b
-				}
-				f, path, err := b.getFile(k)
-				if err != nil {
-					panic(stacktrace.Propagate(err, "failed to get file for record: %v", k))
-				}
-				if pointer, ok := b.keymeta[k]; ok {
-					_, err := f.WriteAt(buf, pointer.Offset)
+			go func() {
+				b.lock.Lock()
+				defer b.lock.Unlock()
+				for k, val := range b.cache {
+					buf := make([]byte, b.recordSize)
+					bits, err := json.Marshal(val)
 					if err != nil {
-						panic(stacktrace.Propagate(err, "failed to write record"))
+						panic(stacktrace.Propagate(err, "failed to encode record"))
 					}
-				} else {
-					_, err = f.Write(buf)
+					fmt.Println("DEBUG", k, string(bits))
+					for i, b := range bits {
+						buf[i] = b
+					}
+					f, path, err := b.getFile(k)
 					if err != nil {
-						panic(stacktrace.Propagate(err, "failed to write record"))
+						panic(stacktrace.Propagate(err, "failed to get file for record: %v", k))
 					}
+					if pointer, ok := b.keymeta[k]; ok {
+						_, err := f.WriteAt(buf, pointer.Offset)
+						if err != nil {
+							panic(stacktrace.Propagate(err, "failed to write record"))
+						}
+					} else {
+						_, err = f.Write(buf)
+						if err != nil {
+							panic(stacktrace.Propagate(err, "failed to write record"))
+						}
+					}
+					if b.filekeys[path] == nil {
+						b.filekeys[path] = map[string]struct{}{}
+					}
+					b.filekeys[path][k] = struct{}{}
+					b.keymeta[k] = &keyMeta{
+						File:   f,
+						Offset: int64((len(b.filekeys[path]) - 1) * b.recordSize),
+					}
+					delete(b.cache, k)
 				}
-				if b.filekeys[path] == nil {
-					b.filekeys[path] = map[string]struct{}{}
-				}
-				b.filekeys[path][k] = struct{}{}
-				b.keymeta[k] = &keyMeta{
-					File:   f,
-					Offset: int64((len(b.filekeys[path]) - 1) * b.recordSize),
-				}
-				delete(b.cache, k)
-			}
+			}()
 		}
 	}
 }
