@@ -16,8 +16,9 @@ import (
 const prefixSize = 3
 
 type keyMeta struct {
-	File   *os.File
-	Offset int64
+	File    *os.File
+	Offset  int64
+	Deleted bool
 }
 
 type Bucket struct {
@@ -66,18 +67,13 @@ func (s *Bucket) Get(key string) (map[string]interface{}, error) {
 	if val, ok := s.cache.Get(key); ok {
 		return val, nil
 	}
-	if s.debug {
-		fmt.Println(stacktrace.NewError("rlock"))
-	}
 	s.lock.RLock()
-	defer func() {
-		s.lock.RUnlock()
-		if s.debug {
-			fmt.Println(stacktrace.NewError("runlock"))
-		}
-	}()
+	defer s.lock.RUnlock()
 	pointer, ok := s.keymeta[key]
 	if !ok {
+		return nil, stacktrace.NewError("not found")
+	}
+	if pointer.Deleted {
 		return nil, stacktrace.NewError("not found")
 	}
 	buf := make([]byte, s.recordSize)
@@ -103,6 +99,19 @@ func (s *Bucket) Set(key string, value map[string]interface{}) error {
 	}
 	s.queue <- map[string]map[string]interface{}{key: value}
 	s.cache.Set(key, value, false)
+	return nil
+}
+
+func (s *Bucket) Del(key string) error {
+	if err := s.ctx.Err(); err != nil {
+		return stacktrace.Propagate(err, "")
+	}
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	if _, ok := s.keymeta[key]; ok {
+		s.keymeta[key].Deleted = true
+	}
+	s.cache.Del(key)
 	return nil
 }
 
@@ -164,6 +173,9 @@ func (b *Bucket) start() {
 				}
 			case values := <-b.queue:
 				b.machine.Go(b.ctx, func(ctx context.Context) error {
+					if values == nil {
+
+					}
 					for k, val := range values {
 						if err := b.store(k, val); err != nil {
 							fmt.Println(stacktrace.Propagate(err, ""))
@@ -198,6 +210,7 @@ func (b *Bucket) store(k string, val map[string]interface{}) error {
 		if err != nil {
 			return stacktrace.Propagate(err, "failed to write record")
 		}
+		pointer.Deleted = false
 	} else {
 		_, err = f.Write(buf)
 		if err != nil {
@@ -209,8 +222,9 @@ func (b *Bucket) store(k string, val map[string]interface{}) error {
 	}
 	b.filekeys[path][k] = struct{}{}
 	b.keymeta[k] = &keyMeta{
-		File:   f,
-		Offset: int64((len(b.filekeys[path]) - 1) * b.recordSize),
+		File:    f,
+		Offset:  int64((len(b.filekeys[path]) - 1) * b.recordSize),
+		Deleted: false,
 	}
 	b.cache.Set(k, val, true)
 	return nil

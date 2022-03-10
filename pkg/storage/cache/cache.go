@@ -55,6 +55,12 @@ func (c *Cache) Set(key string, values map[string]interface{}, isCommited bool) 
 	item.commited = isCommited
 }
 
+func (c *Cache) Del(key string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.records, key)
+}
+
 func (c *Cache) GC(ctx context.Context) {
 
 	if c.gcInterval == 0 {

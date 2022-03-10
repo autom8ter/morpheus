@@ -5,36 +5,45 @@ import (
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/dgraph-io/badger/v3"
+	lru "github.com/hashicorp/golang-lru"
 )
 
-func NewGraph(dir string) api.Graph {
+func NewGraph(dir string, cacheSize int) (api.Graph, error) {
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return api.NewGraph(func(prefix, nodeType, nodeID string, properties map[string]interface{}) api.Entity {
-		setProperties := func(props map[string]interface{}) {
-			if props == nil {
-				props = map[string]interface{}{}
+	cache, err := lru.NewWithEvict(cacheSize, func(key interface{}, value interface{}) {
+		if err := db.Update(func(txn *badger.Txn) error {
+			bits, _ := encode.Marshal(value)
+			if err := txn.Set([]byte(key.(string)), bits); err != nil {
+				return err
 			}
-			if err := db.Update(func(txn *badger.Txn) error {
-				bits, _ := encode.Marshal(props)
-				if err := txn.Set(getKey(prefix, nodeType, nodeID), bits); err != nil {
-					return err
-				}
-				return nil
-			}); err != nil {
-				panic(err)
-			}
+			return nil
+		}); err != nil {
+			panic(err)
 		}
-		setProperties(properties)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return api.NewGraph(func(prefix, nodeType, nodeID string, properties map[string]interface{}) api.Entity {
+		if properties == nil {
+			properties = map[string]interface{}{}
+		}
+		cache.Add(getKey(prefix, nodeType, nodeID), properties)
 		return api.NewEntity(
 			nodeType,
 			nodeID,
 			func() map[string]interface{} {
+				if val, ok := cache.Get(getKey(prefix, nodeType, nodeID)); ok {
+					return val.(map[string]interface{})
+				}
+
 				data := map[string]interface{}{}
 				if err := db.View(func(txn *badger.Txn) error {
-					val, err := txn.Get(getKey(prefix, nodeType, nodeID))
+					val, err := txn.Get([]byte(getKey(prefix, nodeType, nodeID)))
 					if err != nil {
 						return err
 					}
@@ -43,18 +52,24 @@ func NewGraph(dir string) api.Graph {
 					}); err != nil {
 						return err
 					}
+					cache.Add(getKey(prefix, nodeType, nodeID), data)
 					return nil
 				}); err != nil {
 					panic(err)
 				}
 				return data
 			},
-			setProperties)
+			func(properties map[string]interface{}) {
+				if properties == nil {
+					properties = map[string]interface{}{}
+				}
+				cache.Add(getKey(prefix, nodeType, nodeID), properties)
+			})
 	}, func() error {
 		return db.Close()
-	})
+	}), nil
 }
 
-func getKey(prefix, nodeType, nodeID string) []byte {
-	return []byte(fmt.Sprintf("%s_%s_%s", prefix, nodeType, nodeID))
+func getKey(prefix, nodeType, nodeID string) string {
+	return fmt.Sprintf("%s_%s_%s", prefix, nodeType, nodeID)
 }

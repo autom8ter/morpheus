@@ -14,7 +14,10 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "start server",
 	Run: func(_ *cobra.Command, _ []string) {
-		g := badger.NewGraph(fmt.Sprintf("%s/storage", cfg.Database.StoragePath))
+		g, err := badger.NewGraph(fmt.Sprintf("%s/storage", cfg.Database.StoragePath), 1000000)
+		if err != nil {
+			panic(err)
+		}
 		defer func() {
 			if err := g.Close(); err != nil {
 				logger.L.Error("failed to close graph", map[string]interface{}{
