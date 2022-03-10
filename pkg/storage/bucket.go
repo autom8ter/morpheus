@@ -192,6 +192,7 @@ func (b *Bucket) store(k string, val map[string]interface{}) error {
 	if err != nil {
 		return stacktrace.Propagate(err, "failed to get file for record: %v", k)
 	}
+
 	if pointer, ok := b.keymeta[k]; ok {
 		_, err := f.WriteAt(buf, pointer.Offset)
 		if err != nil {

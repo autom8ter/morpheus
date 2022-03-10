@@ -102,7 +102,6 @@ func BenchmarkSetGetOneKey(b *testing.B) {
 	})
 }
 
-
 // BenchmarkSetGetManyKey-16                 720487              3854 ns/op            2224 B/op         22 allocs/op
 func BenchmarkSetGetManyKey(b *testing.B) {
 	d, err := ioutil.TempDir("", "")
@@ -160,6 +159,7 @@ func BenchmarkGetOneKey(b *testing.B) {
 
 	})
 }
+
 //
 ////     72301             18549 ns/op            2414 B/op         60 allocs/op
 //func BenchmarkBadgerSetGetManyKey(b *testing.B) {
