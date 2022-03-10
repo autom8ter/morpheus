@@ -6,18 +6,30 @@ import (
 	"github.com/palantir/stacktrace"
 	"os"
 	"sync"
+	"time"
 )
 
 type Storage struct {
+	debug      bool
 	rootDir    string
 	buckets    map[string]*Bucket
 	mu         sync.RWMutex
 	recordSize int
 	ctx        context.Context
+	cancel     func()
 }
 
-func NewStorage(rootDir string, recordSize int) *Storage {
-	return &Storage{mu: sync.RWMutex{}, recordSize: recordSize, buckets: map[string]*Bucket{}, rootDir: rootDir}
+func NewStorage(ctx context.Context, rootDir string, recordSize int, debug bool) *Storage {
+	ctx, cancel := context.WithCancel(ctx)
+	return &Storage{
+		debug:      debug,
+		rootDir:    rootDir,
+		buckets:    map[string]*Bucket{},
+		mu:         sync.RWMutex{},
+		recordSize: recordSize,
+		ctx:        ctx,
+		cancel:     cancel,
+	}
 }
 
 func (s *Storage) GetBucket(bucket string) *Bucket {
@@ -27,21 +39,15 @@ func (s *Storage) GetBucket(bucket string) *Bucket {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			panic(stacktrace.Propagate(err, ""))
 		}
-		closed := int64(0)
-		b = &Bucket{
-			dir:        dir,
-			filekeys:   map[string]map[string]struct{}{},
-			keymeta:    map[string]*keyMeta{},
-			files:      map[string]*os.File{},
-			cache:      map[string]map[string]interface{}{},
-			lock:       &sync.RWMutex{},
-			recordSize: s.recordSize,
-			closed:     &closed,
-		}
+		b = NewBucket(s.ctx, dir, s.recordSize, 1000000, 1*time.Minute, s.debug)
 		s.buckets[bucket] = b
-		go func() {
-			b.gc(context.Background())
-		}()
 	}
 	return b
+}
+
+func (s *Storage) Close() {
+	s.cancel()
+	for _, b := range s.buckets {
+		b.Close()
+	}
 }

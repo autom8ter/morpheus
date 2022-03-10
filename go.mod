@@ -20,6 +20,7 @@ require (
 require (
 	github.com/agnivade/levenshtein v1.1.0 // indirect
 	github.com/armon/go-metrics v0.3.10 // indirect
+	github.com/autom8ter/machine/v3 v3.0.0-20220131185328-343df58e25ee // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
