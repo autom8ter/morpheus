@@ -16,7 +16,7 @@ func Test(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	g, err := NewGraph(dir, 1000000)
+	g, err := NewGraph(dir, 100)
 	if err != nil {
 		t.Fatal(err)
 	}

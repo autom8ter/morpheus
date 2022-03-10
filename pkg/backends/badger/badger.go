@@ -19,6 +19,7 @@ func NewGraph(dir string, cacheSize int) (api.Graph, error) {
 			if err := txn.Set([]byte(key.(string)), bits); err != nil {
 				return err
 			}
+
 			return nil
 		}); err != nil {
 			panic(err)
@@ -27,7 +28,6 @@ func NewGraph(dir string, cacheSize int) (api.Graph, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return api.NewGraph(func(prefix, nodeType, nodeID string, properties map[string]interface{}) api.Entity {
 		if properties == nil {
 			properties = map[string]interface{}{}
@@ -66,6 +66,7 @@ func NewGraph(dir string, cacheSize int) (api.Graph, error) {
 				cache.Add(getKey(prefix, nodeType, nodeID), properties)
 			})
 	}, func() error {
+		cache.Purge()
 		return db.Close()
 	}), nil
 }
