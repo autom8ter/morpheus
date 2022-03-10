@@ -87,7 +87,7 @@ func Middleware(lgger *Logger, handler http.Handler) http.Handler {
 			lgger.Info("http request/response", map[string]interface{}{
 				"url":        r.URL.String(),
 				"method":     r.Method,
-				"elapsed_ms": time.Since(now).Milliseconds(),
+				"elapsed_ns": time.Since(now).Nanoseconds(),
 			})
 		}()
 		handler.ServeHTTP(w, r)

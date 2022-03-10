@@ -6,11 +6,11 @@ package graph
 import (
 	"context"
 	"fmt"
+	"github.com/palantir/stacktrace"
 	"sort"
 
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/auth"
-	"github.com/autom8ter/morpheus/pkg/dataloader"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/autom8ter/morpheus/pkg/graph/generated"
 	"github.com/autom8ter/morpheus/pkg/graph/model"
@@ -215,28 +215,20 @@ func (r *mutationResolver) BulkDel(ctx context.Context, del []*model.Key) (bool,
 func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[string]interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	val, err := dataloader.For(ctx).NodeByID.Load(dataloader.ID(obj.Type, obj.ID))
+	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "")
 	}
-	if val == nil {
-		return nil, fmt.Errorf("failed to find node")
-	}
-	n := *val
 	return n.Properties(), nil
 }
 
 func (r *nodeResolver) GetProperty(ctx context.Context, obj *model.Node, key string) (interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	val, err := dataloader.For(ctx).NodeByID.Load(dataloader.ID(obj.Type, obj.ID))
+	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "")
 	}
-	if val == nil {
-		return nil, fmt.Errorf("failed to find node")
-	}
-	n := *val
 	return n.GetProperty(key), nil
 }
 
@@ -273,14 +265,10 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, id string) (*model.Relationship, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	val, err := dataloader.For(ctx).NodeByID.Load(dataloader.ID(obj.Type, obj.ID))
+	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "")
 	}
-	if val == nil {
-		return nil, fmt.Errorf("failed to find node")
-	}
-	n := *val
 	rel, ok := n.GetRelationship(api.Direction(direction), relationship, id)
 	if !ok {
 		return nil, fmt.Errorf("not found")
@@ -357,14 +345,10 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, dir
 func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direction model.Direction, filter *model.Filter) (*model.Relationships, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	val, err := dataloader.For(ctx).NodeByID.Load(dataloader.ID(obj.Type, obj.ID))
+	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "")
 	}
-	if val == nil {
-		return nil, fmt.Errorf("failed to find node")
-	}
-	n := *val
 	skip := 0
 	if filter.Cursor != nil {
 		skp, err := r.parseCursor(*filter.Cursor)
@@ -439,14 +423,10 @@ func (r *queryResolver) Types(ctx context.Context) ([]string, error) {
 func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	val, err := dataloader.For(ctx).NodeByID.Load(dataloader.ID(key.Type, key.ID))
+	n, err := r.graph.GetNode(key.Type, key.ID)
 	if err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "")
 	}
-	if val == nil {
-		return nil, fmt.Errorf("failed to find node")
-	}
-	n := *val
 	return toNode(n), nil
 }
 

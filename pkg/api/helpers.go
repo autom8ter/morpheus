@@ -1,8 +1,8 @@
 package api
 
 import (
-	"fmt"
 	"github.com/autom8ter/morpheus/pkg/datastructure"
+	"github.com/palantir/stacktrace"
 	"sort"
 )
 
@@ -19,10 +19,6 @@ func NewEntity(
 	getProperties func() map[string]interface{},
 	setProperties func(properties map[string]interface{})) Entity {
 	return &iEntity{id: id, typee: typee, getProperties: getProperties, setProperties: setProperties}
-}
-
-func (i iEntity) Hash() string {
-	return fmt.Sprintf("%s/%s", i.typee, i.id)
 }
 
 func (i iEntity) ID() string {
@@ -67,14 +63,6 @@ func (i iRelationship) Source() Node {
 
 func (i iRelationship) Target() Node {
 	return i.getTarget()
-}
-
-func (i iRelationship) Reverse() Relationship {
-	return iRelationship{
-		Entity:    i.Entity,
-		getSource: i.getTarget,
-		getTarget: i.getSource,
-	}
 }
 
 type iNode struct {
@@ -195,11 +183,11 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 	return newGraph(
 		func(nodeType string, nodeID string) (Node, error) {
 			if nodes[nodeType] == nil {
-				return nil, fmt.Errorf("not found")
+				return nil, stacktrace.NewError("not found")
 			}
 			val, ok := nodes[nodeType].Get(nodeID)
 			if !ok {
-				return nil, fmt.Errorf("not found")
+				return nil, stacktrace.NewError("not found")
 			}
 			return val.(Node), nil
 		},
@@ -363,11 +351,11 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 		},
 		func(typee string, id string) (Relationship, error) {
 			if relationships[typee] == nil {
-				return nil, fmt.Errorf("not found")
+				return nil, stacktrace.NewError("not found")
 			}
 			val, ok := relationships[typee].Get(id)
 			if !ok {
-				return nil, fmt.Errorf("not found")
+				return nil, stacktrace.NewError("not found")
 			}
 			return val.(Relationship), nil
 		},

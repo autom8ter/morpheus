@@ -8,7 +8,6 @@ const (
 )
 
 type Entity interface {
-	Hash() string
 	ID() string
 	Type() string
 	Properties() map[string]interface{}
@@ -31,7 +30,6 @@ type Relationship interface {
 	Entity
 	Source() Node
 	Target() Node
-	Reverse() Relationship
 }
 
 type Graph interface {

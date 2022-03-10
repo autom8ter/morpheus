@@ -3,8 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/autom8ter/morpheus/pkg/backends/badger"
 	"github.com/autom8ter/morpheus/pkg/logger"
+	"github.com/autom8ter/morpheus/pkg/persistance"
 	"github.com/autom8ter/morpheus/pkg/server"
 	"github.com/spf13/cobra"
 )
@@ -14,7 +14,7 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "start server",
 	Run: func(_ *cobra.Command, _ []string) {
-		g, err := badger.NewGraph(fmt.Sprintf("%s/storage", cfg.Database.StoragePath), 1000000)
+		g, err := persistance.NewPersistantGraph(fmt.Sprintf("%s/storage", cfg.Database.StoragePath), 100000)
 		if err != nil {
 			panic(err)
 		}

@@ -1,4 +1,4 @@
-package badger
+package persistance
 
 import (
 	"encoding/json"
@@ -16,7 +16,7 @@ func Test(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	g, err := NewGraph(dir, 100)
+	g, err := NewPersistantGraph(dir, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func Test(t *testing.T) {
 /*
 go test  -bench=Benchmark . -benchmem -run=^$
 
-BenchmarkRead: 1765699               645.7 ns/op           160 B/op          9 allocs/op
+Benchmark: 170589              7558 ns/op            3840 B/op         64 allocs/op
 */
 func Benchmark(b *testing.B) {
 	dir, err := ioutil.TempDir("", "badger-test")
@@ -60,7 +60,7 @@ func Benchmark(b *testing.B) {
 		b.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	g, err := NewGraph(dir, 1000000) // enabled = 649.0, disabled = 3022
+	g, err := NewPersistantGraph(dir, 1000000)
 	if err != nil {
 		b.Fatal(err)
 	}
