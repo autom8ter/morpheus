@@ -65,6 +65,7 @@ type ComplexityRoot struct {
 
 	Query struct {
 		Add     func(childComplexity int, add model.AddNode) int
+		AddPeer func(childComplexity int, peerID string, addr string) int
 		BulkAdd func(childComplexity int, add []*model.AddNode) int
 		BulkDel func(childComplexity int, del []*model.Key) int
 		BulkSet func(childComplexity int, set []*model.SetNode) int
@@ -114,6 +115,7 @@ type QueryResolver interface {
 	BulkAdd(ctx context.Context, add []*model.AddNode) (bool, error)
 	BulkSet(ctx context.Context, set []*model.SetNode) (bool, error)
 	BulkDel(ctx context.Context, del []*model.Key) (bool, error)
+	AddPeer(ctx context.Context, peerID string, addr string) (bool, error)
 }
 type RelationshipResolver interface {
 	Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error)
@@ -266,6 +268,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.Add(childComplexity, args["add"].(model.AddNode)), true
+
+	case "Query.addPeer":
+		if e.complexity.Query.AddPeer == nil {
+			break
+		}
+
+		args, err := ec.field_Query_addPeer_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.AddPeer(childComplexity, args["peerID"].(string), args["addr"].(string)), true
 
 	case "Query.bulkAdd":
 		if e.complexity.Query.BulkAdd == nil {
@@ -504,6 +518,13 @@ var sources = []*ast.Source{
 
 scalar Any
 
+enum Role {
+  READER
+  WRITER
+  ADMIN
+  CLUSTER_PEER
+}
+
 input Key {
   type: String!
   id: String!
@@ -612,6 +633,8 @@ type Query {
   bulkAdd(add: [AddNode!]): Boolean!
   bulkSet(set: [SetNode!]): Boolean!
   bulkDel(del: [Key!]): Boolean!
+
+  addPeer(peerID: String!, addr: String!): Boolean!
 }
 `, BuiltIn: false},
 }
@@ -792,6 +815,30 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		}
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_addPeer_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["peerID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("peerID"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["peerID"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["addr"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addr"))
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["addr"] = arg1
 	return args, nil
 }
 
@@ -1848,6 +1895,48 @@ func (ec *executionContext) _Query_bulkDel(ctx context.Context, field graphql.Co
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
 		return ec.resolvers.Query().BulkDel(rctx, args["del"].([]*model.Key))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_addPeer(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_addPeer_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().AddPeer(rctx, args["peerID"].(string), args["addr"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -4210,6 +4299,29 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_bulkDel(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return rrm(innerCtx)
+			})
+		case "addPeer":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_addPeer(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}

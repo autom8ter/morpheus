@@ -2,6 +2,13 @@ scalar Map
 
 scalar Any
 
+enum Role {
+  READER
+  WRITER
+  ADMIN
+  CLUSTER_PEER
+}
+
 input Key {
   type: String!
   id: String!
@@ -98,6 +105,10 @@ input SetNode {
   properties: Map
 }
 
+type Cluster {
+  addPeer(peerID: String!, addr: String!): Boolean!
+}
+
 type Query {
   types: [String!]
   get(key: Key!): Node!
@@ -110,4 +121,6 @@ type Query {
   bulkAdd(add: [AddNode!]): Boolean!
   bulkSet(set: [SetNode!]): Boolean!
   bulkDel(del: [Key!]): Boolean!
+
+  cluster: Cluster!
 }

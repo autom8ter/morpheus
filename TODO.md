@@ -8,3 +8,5 @@
 - [ ] sessions for user interface
 - [ ] redirect traffic to raft leader
 - [ ] benchmarks against imdb dataset
+- [ ] command line interface
+- [ ] scripting language w/ interpreter

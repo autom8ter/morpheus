@@ -505,6 +505,13 @@ func (r *queryResolver) BulkDel(ctx context.Context, del []*model.Key) (bool, er
 	return true, nil
 }
 
+func (r *queryResolver) AddPeer(ctx context.Context, peerID string, addr string) (bool, error) {
+	if err := r.raft.Join(peerID, addr); err != nil {
+		return false, stacktrace.Propagate(err, "failed to add peer: %s %s", peerID, addr)
+	}
+	return true, nil
+}
+
 func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

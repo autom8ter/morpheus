@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -106,8 +105,6 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 		mux.Handle("/query", srv)
 	}
 
-	mux.Handle("/raft/join", rft.JoinHTTPHandler())
-
 	server := &http.Server{Handler: logger.Middleware(logger.L, mux)}
 	wg := errgroup.Group{}
 	wg.Go(func() error {
@@ -123,19 +120,5 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 	wg.Go(func() error {
 		return server.Serve(glis)
 	})
-	if cfg.Server.RaftCluster != "" && cfg.Server.RaftBroadcast != "" {
-		wg.Go(func() error {
-			if !raft.JoinCluster(
-				context.Background(),
-				cfg.Server.RaftCluster,
-				cfg.Server.RaftBroadcast,
-				cfg.Server.RaftSecret,
-			) {
-				cancel()
-				return errors.New("failed to join raft cluster")
-			}
-			return nil
-		})
-	}
 	return wg.Wait()
 }
