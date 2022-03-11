@@ -18,6 +18,14 @@ type AddNode struct {
 	Properties map[string]interface{} `json:"properties"`
 }
 
+type Admin struct {
+	Login string `json:"login"`
+}
+
+type Cluster struct {
+	AddPeer bool `json:"addPeer"`
+}
+
 type Expression struct {
 	Key      string      `json:"key"`
 	Operator Operator    `json:"operator"`
@@ -30,6 +38,19 @@ type Filter struct {
 	Expressions []*Expression `json:"expressions"`
 	PageSize    *int          `json:"page_size"`
 	OrderBy     *OrderBy      `json:"order_by"`
+}
+
+type Graph struct {
+	Types   []string `json:"types"`
+	Get     *Node    `json:"get"`
+	List    *Nodes   `json:"list"`
+	Size    int      `json:"size"`
+	Add     *Node    `json:"add"`
+	Set     *Node    `json:"set"`
+	Del     bool     `json:"del"`
+	BulkAdd bool     `json:"bulkAdd"`
+	BulkSet bool     `json:"bulkSet"`
+	BulkDel bool     `json:"bulkDel"`
 }
 
 type Key struct {

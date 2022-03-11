@@ -36,6 +36,9 @@ type Config struct {
 }
 
 type ResolverRoot interface {
+	Admin() AdminResolver
+	Cluster() ClusterResolver
+	Graph() GraphResolver
 	Node() NodeResolver
 	Query() QueryResolver
 	Relationship() RelationshipResolver
@@ -45,6 +48,27 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	Admin struct {
+		Login func(childComplexity int, username string, password string) int
+	}
+
+	Cluster struct {
+		AddPeer func(childComplexity int, peerID string, addr string) int
+	}
+
+	Graph struct {
+		Add     func(childComplexity int, add model.AddNode) int
+		BulkAdd func(childComplexity int, add []*model.AddNode) int
+		BulkDel func(childComplexity int, del []*model.Key) int
+		BulkSet func(childComplexity int, set []*model.SetNode) int
+		Del     func(childComplexity int, del model.Key) int
+		Get     func(childComplexity int, key model.Key) int
+		List    func(childComplexity int, filter model.Filter) int
+		Set     func(childComplexity int, set model.SetNode) int
+		Size    func(childComplexity int) int
+		Types   func(childComplexity int) int
+	}
+
 	Node struct {
 		AddRelationship func(childComplexity int, direction model.Direction, relationship string, nodeKey model.Key) int
 		DelProperty     func(childComplexity int, key string) int
@@ -64,17 +88,9 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Add     func(childComplexity int, add model.AddNode) int
-		AddPeer func(childComplexity int, peerID string, addr string) int
-		BulkAdd func(childComplexity int, add []*model.AddNode) int
-		BulkDel func(childComplexity int, del []*model.Key) int
-		BulkSet func(childComplexity int, set []*model.SetNode) int
-		Del     func(childComplexity int, del model.Key) int
-		Get     func(childComplexity int, key model.Key) int
-		List    func(childComplexity int, filter model.Filter) int
-		Set     func(childComplexity int, set model.SetNode) int
-		Size    func(childComplexity int) int
-		Types   func(childComplexity int) int
+		Admin   func(childComplexity int) int
+		Cluster func(childComplexity int) int
+		Graph   func(childComplexity int) int
 	}
 
 	Relationship struct {
@@ -94,6 +110,24 @@ type ComplexityRoot struct {
 	}
 }
 
+type AdminResolver interface {
+	Login(ctx context.Context, obj *model.Admin, username string, password string) (string, error)
+}
+type ClusterResolver interface {
+	AddPeer(ctx context.Context, obj *model.Cluster, peerID string, addr string) (bool, error)
+}
+type GraphResolver interface {
+	Types(ctx context.Context, obj *model.Graph) ([]string, error)
+	Get(ctx context.Context, obj *model.Graph, key model.Key) (*model.Node, error)
+	List(ctx context.Context, obj *model.Graph, filter model.Filter) (*model.Nodes, error)
+	Size(ctx context.Context, obj *model.Graph) (int, error)
+	Add(ctx context.Context, obj *model.Graph, add model.AddNode) (*model.Node, error)
+	Set(ctx context.Context, obj *model.Graph, set model.SetNode) (*model.Node, error)
+	Del(ctx context.Context, obj *model.Graph, del model.Key) (bool, error)
+	BulkAdd(ctx context.Context, obj *model.Graph, add []*model.AddNode) (bool, error)
+	BulkSet(ctx context.Context, obj *model.Graph, set []*model.SetNode) (bool, error)
+	BulkDel(ctx context.Context, obj *model.Graph, del []*model.Key) (bool, error)
+}
 type NodeResolver interface {
 	Properties(ctx context.Context, obj *model.Node) (map[string]interface{}, error)
 	GetProperty(ctx context.Context, obj *model.Node, key string) (interface{}, error)
@@ -105,17 +139,9 @@ type NodeResolver interface {
 	Relationships(ctx context.Context, obj *model.Node, direction model.Direction, filter *model.Filter) (*model.Relationships, error)
 }
 type QueryResolver interface {
-	Types(ctx context.Context) ([]string, error)
-	Get(ctx context.Context, key model.Key) (*model.Node, error)
-	List(ctx context.Context, filter model.Filter) (*model.Nodes, error)
-	Size(ctx context.Context) (int, error)
-	Add(ctx context.Context, add model.AddNode) (*model.Node, error)
-	Set(ctx context.Context, set model.SetNode) (*model.Node, error)
-	Del(ctx context.Context, del model.Key) (bool, error)
-	BulkAdd(ctx context.Context, add []*model.AddNode) (bool, error)
-	BulkSet(ctx context.Context, set []*model.SetNode) (bool, error)
-	BulkDel(ctx context.Context, del []*model.Key) (bool, error)
-	AddPeer(ctx context.Context, peerID string, addr string) (bool, error)
+	Graph(ctx context.Context) (*model.Graph, error)
+	Cluster(ctx context.Context) (*model.Cluster, error)
+	Admin(ctx context.Context) (*model.Admin, error)
 }
 type RelationshipResolver interface {
 	Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error)
@@ -137,6 +163,140 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 	ec := executionContext{nil, e}
 	_ = ec
 	switch typeName + "." + field {
+
+	case "Admin.login":
+		if e.complexity.Admin.Login == nil {
+			break
+		}
+
+		args, err := ec.field_Admin_login_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Admin.Login(childComplexity, args["username"].(string), args["password"].(string)), true
+
+	case "Cluster.addPeer":
+		if e.complexity.Cluster.AddPeer == nil {
+			break
+		}
+
+		args, err := ec.field_Cluster_addPeer_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Cluster.AddPeer(childComplexity, args["peerID"].(string), args["addr"].(string)), true
+
+	case "Graph.add":
+		if e.complexity.Graph.Add == nil {
+			break
+		}
+
+		args, err := ec.field_Graph_add_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Graph.Add(childComplexity, args["add"].(model.AddNode)), true
+
+	case "Graph.bulkAdd":
+		if e.complexity.Graph.BulkAdd == nil {
+			break
+		}
+
+		args, err := ec.field_Graph_bulkAdd_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Graph.BulkAdd(childComplexity, args["add"].([]*model.AddNode)), true
+
+	case "Graph.bulkDel":
+		if e.complexity.Graph.BulkDel == nil {
+			break
+		}
+
+		args, err := ec.field_Graph_bulkDel_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Graph.BulkDel(childComplexity, args["del"].([]*model.Key)), true
+
+	case "Graph.bulkSet":
+		if e.complexity.Graph.BulkSet == nil {
+			break
+		}
+
+		args, err := ec.field_Graph_bulkSet_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Graph.BulkSet(childComplexity, args["set"].([]*model.SetNode)), true
+
+	case "Graph.del":
+		if e.complexity.Graph.Del == nil {
+			break
+		}
+
+		args, err := ec.field_Graph_del_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Graph.Del(childComplexity, args["del"].(model.Key)), true
+
+	case "Graph.get":
+		if e.complexity.Graph.Get == nil {
+			break
+		}
+
+		args, err := ec.field_Graph_get_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Graph.Get(childComplexity, args["key"].(model.Key)), true
+
+	case "Graph.list":
+		if e.complexity.Graph.List == nil {
+			break
+		}
+
+		args, err := ec.field_Graph_list_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Graph.List(childComplexity, args["filter"].(model.Filter)), true
+
+	case "Graph.set":
+		if e.complexity.Graph.Set == nil {
+			break
+		}
+
+		args, err := ec.field_Graph_set_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Graph.Set(childComplexity, args["set"].(model.SetNode)), true
+
+	case "Graph.size":
+		if e.complexity.Graph.Size == nil {
+			break
+		}
+
+		return e.complexity.Graph.Size(childComplexity), true
+
+	case "Graph.types":
+		if e.complexity.Graph.Types == nil {
+			break
+		}
+
+		return e.complexity.Graph.Types(childComplexity), true
 
 	case "Node.addRelationship":
 		if e.complexity.Node.AddRelationship == nil {
@@ -257,127 +417,26 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Nodes.Nodes(childComplexity), true
 
-	case "Query.add":
-		if e.complexity.Query.Add == nil {
+	case "Query.admin":
+		if e.complexity.Query.Admin == nil {
 			break
 		}
 
-		args, err := ec.field_Query_add_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
+		return e.complexity.Query.Admin(childComplexity), true
 
-		return e.complexity.Query.Add(childComplexity, args["add"].(model.AddNode)), true
-
-	case "Query.addPeer":
-		if e.complexity.Query.AddPeer == nil {
+	case "Query.cluster":
+		if e.complexity.Query.Cluster == nil {
 			break
 		}
 
-		args, err := ec.field_Query_addPeer_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
+		return e.complexity.Query.Cluster(childComplexity), true
 
-		return e.complexity.Query.AddPeer(childComplexity, args["peerID"].(string), args["addr"].(string)), true
-
-	case "Query.bulkAdd":
-		if e.complexity.Query.BulkAdd == nil {
+	case "Query.graph":
+		if e.complexity.Query.Graph == nil {
 			break
 		}
 
-		args, err := ec.field_Query_bulkAdd_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Query.BulkAdd(childComplexity, args["add"].([]*model.AddNode)), true
-
-	case "Query.bulkDel":
-		if e.complexity.Query.BulkDel == nil {
-			break
-		}
-
-		args, err := ec.field_Query_bulkDel_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Query.BulkDel(childComplexity, args["del"].([]*model.Key)), true
-
-	case "Query.bulkSet":
-		if e.complexity.Query.BulkSet == nil {
-			break
-		}
-
-		args, err := ec.field_Query_bulkSet_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Query.BulkSet(childComplexity, args["set"].([]*model.SetNode)), true
-
-	case "Query.del":
-		if e.complexity.Query.Del == nil {
-			break
-		}
-
-		args, err := ec.field_Query_del_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Query.Del(childComplexity, args["del"].(model.Key)), true
-
-	case "Query.get":
-		if e.complexity.Query.Get == nil {
-			break
-		}
-
-		args, err := ec.field_Query_get_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Query.Get(childComplexity, args["key"].(model.Key)), true
-
-	case "Query.list":
-		if e.complexity.Query.List == nil {
-			break
-		}
-
-		args, err := ec.field_Query_list_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Query.List(childComplexity, args["filter"].(model.Filter)), true
-
-	case "Query.set":
-		if e.complexity.Query.Set == nil {
-			break
-		}
-
-		args, err := ec.field_Query_set_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Query.Set(childComplexity, args["set"].(model.SetNode)), true
-
-	case "Query.size":
-		if e.complexity.Query.Size == nil {
-			break
-		}
-
-		return e.complexity.Query.Size(childComplexity), true
-
-	case "Query.types":
-		if e.complexity.Query.Types == nil {
-			break
-		}
-
-		return e.complexity.Query.Types(childComplexity), true
+		return e.complexity.Query.Graph(childComplexity), true
 
 	case "Relationship.delProperty":
 		if e.complexity.Relationship.DelProperty == nil {
@@ -621,7 +680,15 @@ input SetNode {
   properties: Map
 }
 
-type Query {
+type Admin {
+  login(username: String!, password: String!): String!
+}
+
+type Cluster {
+  addPeer(peerID: String!, addr: String!): Boolean!
+}
+
+type Graph {
   types: [String!]
   get(key: Key!): Node!
   list(filter: Filter!): Nodes!
@@ -633,8 +700,12 @@ type Query {
   bulkAdd(add: [AddNode!]): Boolean!
   bulkSet(set: [SetNode!]): Boolean!
   bulkDel(del: [Key!]): Boolean!
+}
 
-  addPeer(peerID: String!, addr: String!): Boolean!
+type Query {
+  graph: Graph!
+  cluster: Cluster!
+  admin: Admin!
 }
 `, BuiltIn: false},
 }
@@ -643,6 +714,174 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // endregion ************************** generated!.gotpl **************************
 
 // region    ***************************** args.gotpl *****************************
+
+func (ec *executionContext) field_Admin_login_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["username"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("username"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["username"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["password"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("password"))
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["password"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Cluster_addPeer_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["peerID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("peerID"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["peerID"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["addr"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addr"))
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["addr"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Graph_add_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.AddNode
+	if tmp, ok := rawArgs["add"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("add"))
+		arg0, err = ec.unmarshalNAddNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["add"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Graph_bulkAdd_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 []*model.AddNode
+	if tmp, ok := rawArgs["add"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("add"))
+		arg0, err = ec.unmarshalOAddNode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNodeᚄ(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["add"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Graph_bulkDel_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 []*model.Key
+	if tmp, ok := rawArgs["del"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("del"))
+		arg0, err = ec.unmarshalOKey2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKeyᚄ(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["del"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Graph_bulkSet_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 []*model.SetNode
+	if tmp, ok := rawArgs["set"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("set"))
+		arg0, err = ec.unmarshalOSetNode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNodeᚄ(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["set"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Graph_del_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.Key
+	if tmp, ok := rawArgs["del"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("del"))
+		arg0, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["del"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Graph_get_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.Key
+	if tmp, ok := rawArgs["key"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
+		arg0, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["key"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Graph_list_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.Filter
+	if tmp, ok := rawArgs["filter"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
+		arg0, err = ec.unmarshalNFilter2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐFilter(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["filter"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Graph_set_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.SetNode
+	if tmp, ok := rawArgs["set"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("set"))
+		arg0, err = ec.unmarshalNSetNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNode(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["set"] = arg0
+	return args, nil
+}
 
 func (ec *executionContext) field_Node_addRelationship_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
@@ -818,150 +1057,6 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_addPeer_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 string
-	if tmp, ok := rawArgs["peerID"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("peerID"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["peerID"] = arg0
-	var arg1 string
-	if tmp, ok := rawArgs["addr"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addr"))
-		arg1, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["addr"] = arg1
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_add_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 model.AddNode
-	if tmp, ok := rawArgs["add"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("add"))
-		arg0, err = ec.unmarshalNAddNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["add"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_bulkAdd_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []*model.AddNode
-	if tmp, ok := rawArgs["add"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("add"))
-		arg0, err = ec.unmarshalOAddNode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNodeᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["add"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_bulkDel_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []*model.Key
-	if tmp, ok := rawArgs["del"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("del"))
-		arg0, err = ec.unmarshalOKey2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKeyᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["del"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_bulkSet_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []*model.SetNode
-	if tmp, ok := rawArgs["set"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("set"))
-		arg0, err = ec.unmarshalOSetNode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNodeᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["set"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_del_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 model.Key
-	if tmp, ok := rawArgs["del"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("del"))
-		arg0, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["del"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_get_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 model.Key
-	if tmp, ok := rawArgs["key"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
-		arg0, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["key"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_list_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 model.Filter
-	if tmp, ok := rawArgs["filter"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
-		arg0, err = ec.unmarshalNFilter2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐFilter(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["filter"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_set_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 model.SetNode
-	if tmp, ok := rawArgs["set"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("set"))
-		arg0, err = ec.unmarshalNSetNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNode(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["set"] = arg0
-	return args, nil
-}
-
 func (ec *executionContext) field_Relationship_delProperty_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -1044,6 +1139,493 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 // endregion ************************** directives.gotpl **************************
 
 // region    **************************** field.gotpl *****************************
+
+func (ec *executionContext) _Admin_login(ctx context.Context, field graphql.CollectedField, obj *model.Admin) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Admin",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Admin_login_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Admin().Login(rctx, obj, args["username"].(string), args["password"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Cluster_addPeer(ctx context.Context, field graphql.CollectedField, obj *model.Cluster) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Cluster",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Cluster_addPeer_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Cluster().AddPeer(rctx, obj, args["peerID"].(string), args["addr"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Graph_types(ctx context.Context, field graphql.CollectedField, obj *model.Graph) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Graph",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Graph().Types(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Graph_get(ctx context.Context, field graphql.CollectedField, obj *model.Graph) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Graph",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Graph_get_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Graph().Get(rctx, obj, args["key"].(model.Key))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Node)
+	fc.Result = res
+	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Graph_list(ctx context.Context, field graphql.CollectedField, obj *model.Graph) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Graph",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Graph_list_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Graph().List(rctx, obj, args["filter"].(model.Filter))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Nodes)
+	fc.Result = res
+	return ec.marshalNNodes2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodes(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Graph_size(ctx context.Context, field graphql.CollectedField, obj *model.Graph) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Graph",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Graph().Size(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Graph_add(ctx context.Context, field graphql.CollectedField, obj *model.Graph) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Graph",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Graph_add_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Graph().Add(rctx, obj, args["add"].(model.AddNode))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Node)
+	fc.Result = res
+	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Graph_set(ctx context.Context, field graphql.CollectedField, obj *model.Graph) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Graph",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Graph_set_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Graph().Set(rctx, obj, args["set"].(model.SetNode))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Node)
+	fc.Result = res
+	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Graph_del(ctx context.Context, field graphql.CollectedField, obj *model.Graph) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Graph",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Graph_del_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Graph().Del(rctx, obj, args["del"].(model.Key))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Graph_bulkAdd(ctx context.Context, field graphql.CollectedField, obj *model.Graph) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Graph",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Graph_bulkAdd_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Graph().BulkAdd(rctx, obj, args["add"].([]*model.AddNode))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Graph_bulkSet(ctx context.Context, field graphql.CollectedField, obj *model.Graph) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Graph",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Graph_bulkSet_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Graph().BulkSet(rctx, obj, args["set"].([]*model.SetNode))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Graph_bulkDel(ctx context.Context, field graphql.CollectedField, obj *model.Graph) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Graph",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Graph_bulkDel_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Graph().BulkDel(rctx, obj, args["del"].([]*model.Key))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
 
 func (ec *executionContext) _Node_id(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
 	defer func() {
@@ -1508,7 +2090,7 @@ func (ec *executionContext) _Nodes_nodes(ctx context.Context, field graphql.Coll
 	return ec.marshalONode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodeᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Query_types(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_graph(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -1526,46 +2108,7 @@ func (ec *executionContext) _Query_types(ctx context.Context, field graphql.Coll
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Types(rctx)
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.([]string)
-	fc.Result = res
-	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_get(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Query_get_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Get(rctx, args["key"].(model.Key))
+		return ec.resolvers.Query().Graph(rctx)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1577,54 +2120,12 @@ func (ec *executionContext) _Query_get(ctx context.Context, field graphql.Collec
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.Node)
+	res := resTmp.(*model.Graph)
 	fc.Result = res
-	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
+	return ec.marshalNGraph2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐGraph(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Query_list(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Query_list_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().List(rctx, args["filter"].(model.Filter))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(*model.Nodes)
-	fc.Result = res
-	return ec.marshalNNodes2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodes(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_size(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_cluster(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -1642,7 +2143,7 @@ func (ec *executionContext) _Query_size(ctx context.Context, field graphql.Colle
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Size(rctx)
+		return ec.resolvers.Query().Cluster(rctx)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1654,12 +2155,12 @@ func (ec *executionContext) _Query_size(ctx context.Context, field graphql.Colle
 		}
 		return graphql.Null
 	}
-	res := resTmp.(int)
+	res := resTmp.(*model.Cluster)
 	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
+	return ec.marshalNCluster2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐCluster(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Query_add(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_admin(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -1675,16 +2176,9 @@ func (ec *executionContext) _Query_add(ctx context.Context, field graphql.Collec
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Query_add_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Add(rctx, args["add"].(model.AddNode))
+		return ec.resolvers.Query().Admin(rctx)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1696,261 +2190,9 @@ func (ec *executionContext) _Query_add(ctx context.Context, field graphql.Collec
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.Node)
+	res := resTmp.(*model.Admin)
 	fc.Result = res
-	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_set(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Query_set_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Set(rctx, args["set"].(model.SetNode))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(*model.Node)
-	fc.Result = res
-	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_del(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Query_del_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Del(rctx, args["del"].(model.Key))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(bool)
-	fc.Result = res
-	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_bulkAdd(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Query_bulkAdd_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().BulkAdd(rctx, args["add"].([]*model.AddNode))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(bool)
-	fc.Result = res
-	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_bulkSet(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Query_bulkSet_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().BulkSet(rctx, args["set"].([]*model.SetNode))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(bool)
-	fc.Result = res
-	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_bulkDel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Query_bulkDel_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().BulkDel(rctx, args["del"].([]*model.Key))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(bool)
-	fc.Result = res
-	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_addPeer(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Query_addPeer_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().AddPeer(rctx, args["peerID"].(string), args["addr"].(string))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(bool)
-	fc.Result = res
-	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+	return ec.marshalNAdmin2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAdmin(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -3840,6 +4082,306 @@ func (ec *executionContext) _Entity(ctx context.Context, sel ast.SelectionSet, o
 
 // region    **************************** object.gotpl ****************************
 
+var adminImplementors = []string{"Admin"}
+
+func (ec *executionContext) _Admin(ctx context.Context, sel ast.SelectionSet, obj *model.Admin) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, adminImplementors)
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Admin")
+		case "login":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Admin_login(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var clusterImplementors = []string{"Cluster"}
+
+func (ec *executionContext) _Cluster(ctx context.Context, sel ast.SelectionSet, obj *model.Cluster) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, clusterImplementors)
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Cluster")
+		case "addPeer":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Cluster_addPeer(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var graphImplementors = []string{"Graph"}
+
+func (ec *executionContext) _Graph(ctx context.Context, sel ast.SelectionSet, obj *model.Graph) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, graphImplementors)
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Graph")
+		case "types":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Graph_types(ctx, field, obj)
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		case "get":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Graph_get(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		case "list":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Graph_list(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		case "size":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Graph_size(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		case "add":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Graph_add(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		case "set":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Graph_set(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		case "del":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Graph_del(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		case "bulkAdd":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Graph_bulkAdd(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		case "bulkSet":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Graph_bulkSet(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		case "bulkDel":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Graph_bulkDel(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
 var nodeImplementors = []string{"Node", "Entity"}
 
 func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj *model.Node) graphql.Marshaler {
@@ -4085,7 +4627,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Query")
-		case "types":
+		case "graph":
 			field := field
 
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -4094,27 +4636,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_types(ctx, field)
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
-			}
-
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
-		case "get":
-			field := field
-
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_get(ctx, field)
+				res = ec._Query_graph(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -4128,7 +4650,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			out.Concurrently(i, func() graphql.Marshaler {
 				return rrm(innerCtx)
 			})
-		case "list":
+		case "cluster":
 			field := field
 
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -4137,7 +4659,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_list(ctx, field)
+				res = ec._Query_cluster(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -4151,7 +4673,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			out.Concurrently(i, func() graphql.Marshaler {
 				return rrm(innerCtx)
 			})
-		case "size":
+		case "admin":
 			field := field
 
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -4160,168 +4682,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_size(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
-			}
-
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
-		case "add":
-			field := field
-
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_add(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
-			}
-
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
-		case "set":
-			field := field
-
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_set(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
-			}
-
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
-		case "del":
-			field := field
-
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_del(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
-			}
-
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
-		case "bulkAdd":
-			field := field
-
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_bulkAdd(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
-			}
-
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
-		case "bulkSet":
-			field := field
-
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_bulkSet(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
-			}
-
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
-		case "bulkDel":
-			field := field
-
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_bulkDel(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
-			}
-
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
-		case "addPeer":
-			field := field
-
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_addPeer(ctx, field)
+				res = ec._Query_admin(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -4959,6 +5320,20 @@ func (ec *executionContext) unmarshalNAddNode2ᚖgithubᚗcomᚋautom8terᚋmorp
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNAdmin2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAdmin(ctx context.Context, sel ast.SelectionSet, v model.Admin) graphql.Marshaler {
+	return ec._Admin(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAdmin2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAdmin(ctx context.Context, sel ast.SelectionSet, v *model.Admin) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Admin(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNAny2interface(ctx context.Context, v interface{}) (interface{}, error) {
 	res, err := graphql.UnmarshalAny(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -4995,6 +5370,20 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
+func (ec *executionContext) marshalNCluster2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐCluster(ctx context.Context, sel ast.SelectionSet, v model.Cluster) graphql.Marshaler {
+	return ec._Cluster(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNCluster2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐCluster(ctx context.Context, sel ast.SelectionSet, v *model.Cluster) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Cluster(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNDirection2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx context.Context, v interface{}) (model.Direction, error) {
 	var res model.Direction
 	err := res.UnmarshalGQL(v)
@@ -5013,6 +5402,20 @@ func (ec *executionContext) unmarshalNExpression2ᚖgithubᚗcomᚋautom8terᚋm
 func (ec *executionContext) unmarshalNFilter2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐFilter(ctx context.Context, v interface{}) (model.Filter, error) {
 	res, err := ec.unmarshalInputFilter(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNGraph2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐGraph(ctx context.Context, sel ast.SelectionSet, v model.Graph) graphql.Marshaler {
+	return ec._Graph(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNGraph2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐGraph(ctx context.Context, sel ast.SelectionSet, v *model.Graph) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Graph(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v interface{}) (int, error) {

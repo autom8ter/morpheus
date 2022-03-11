@@ -105,11 +105,15 @@ input SetNode {
   properties: Map
 }
 
+type Admin {
+  login(username: String!, password: String!): String!
+}
+
 type Cluster {
   addPeer(peerID: String!, addr: String!): Boolean!
 }
 
-type Query {
+type Graph {
   types: [String!]
   get(key: Key!): Node!
   list(filter: Filter!): Nodes!
@@ -121,6 +125,10 @@ type Query {
   bulkAdd(add: [AddNode!]): Boolean!
   bulkSet(set: [SetNode!]): Boolean!
   bulkDel(del: [Key!]): Boolean!
+}
 
+type Query {
+  graph: Graph!
   cluster: Cluster!
+  admin: Admin!
 }

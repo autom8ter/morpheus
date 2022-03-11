@@ -19,6 +19,301 @@ import (
 	"github.com/spf13/cast"
 )
 
+func (r *adminResolver) Login(ctx context.Context, obj *model.Admin, username string, password string) (string, error) {
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (r *clusterResolver) AddPeer(ctx context.Context, obj *model.Cluster, peerID string, addr string) (bool, error) {
+	if err := r.raft.Join(peerID, addr); err != nil {
+		return false, stacktrace.Propagate(err, "failed to add peer: %s %s", peerID, addr)
+	}
+	return true, nil
+}
+
+func (r *graphResolver) Types(ctx context.Context, obj *model.Graph) ([]string, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.graph.NodeTypes(), nil
+}
+
+func (r *graphResolver) Get(ctx context.Context, obj *model.Graph, key model.Key) (*model.Node, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	n, err := r.graph.GetNode(key.Type, key.ID)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
+	}
+	return toNode(n), nil
+}
+
+func (r *graphResolver) List(ctx context.Context, obj *model.Graph, filter model.Filter) (*model.Nodes, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var nodes []*model.Node
+	limit := 25
+	skip := 0
+	if filter.Cursor != nil {
+		skp, err := r.parseCursor(*filter.Cursor)
+		if err != nil {
+			return nil, err
+		}
+		skip = skp
+	}
+	if filter.PageSize != nil {
+		limit = *filter.PageSize
+	}
+	if err := r.graph.RangeNodes(skip, filter.Type, func(node api.Node) bool {
+		if len(nodes) >= limit {
+			return false
+		}
+		skip++
+		for _, exp := range filter.Expressions {
+			if !eval(exp, node) {
+				return true
+			}
+		}
+		nodes = append(nodes, toNode(node))
+		return true
+	}); err != nil {
+		return nil, err
+	}
+	if len(nodes) > 0 {
+		if filter.OrderBy != nil && nodes[0].Properties[filter.OrderBy.Field] != nil {
+			sort.Slice(nodes, func(i, j int) bool {
+				if nodes[i].Properties[filter.OrderBy.Field] == nil {
+					return false
+				}
+				if nodes[j].Properties[filter.OrderBy.Field] == nil {
+					return true
+				}
+				if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+					if val, err := cast.ToFloat64E(nodes[i].Properties[filter.OrderBy.Field]); err == nil {
+						return val < cast.ToFloat64(nodes[j].Properties[filter.OrderBy.Field])
+					}
+					return cast.ToString(nodes[i].Properties[filter.OrderBy.Field]) < cast.ToString(nodes[j].Properties[filter.OrderBy.Field])
+				}
+				if val, err := cast.ToFloat64E(nodes[i].Properties[filter.OrderBy.Field]); err == nil {
+					return val > cast.ToFloat64(nodes[j].Properties[filter.OrderBy.Field])
+				}
+				return cast.ToString(nodes[i].Properties[filter.OrderBy.Field]) > cast.ToString(nodes[j].Properties[filter.OrderBy.Field])
+			})
+		} else {
+			if filter.OrderBy != nil && filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+				sort.Slice(nodes, func(i, j int) bool {
+					return nodes[i].ID < nodes[j].ID
+				})
+			} else {
+				sort.Slice(nodes, func(i, j int) bool {
+					return nodes[i].ID > nodes[j].ID
+				})
+			}
+		}
+	}
+	return &model.Nodes{
+		Cursor: r.createCursor(skip),
+		Nodes:  nodes,
+	}, nil
+}
+
+func (r *graphResolver) Size(ctx context.Context, obj *model.Graph) (int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.graph.Size(), nil
+}
+
+func (r *graphResolver) Add(ctx context.Context, obj *model.Graph, add model.AddNode) (*model.Node, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return nil, fmt.Errorf("authorization failed: readonly user")
+	}
+	if add.ID == nil {
+		id := uuid.New().String()
+		add.ID = &id
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cmd := &fsm.CMD{
+		Method: fsm.AddNodes,
+		AddNodes: []fsm.AddNode{
+			{
+				Type:       add.Type,
+				ID:         *add.ID,
+				Properties: add.Properties,
+			},
+		},
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return nil, err
+	}
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return nil, err
+	}
+	if err, ok := val.(error); ok {
+		return nil, err
+	}
+
+	return toNode(val.([]api.Node)[0]), nil
+}
+
+func (r *graphResolver) Set(ctx context.Context, obj *model.Graph, set model.SetNode) (*model.Node, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return nil, fmt.Errorf("authorization failed: readonly user")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cmd := &fsm.CMD{
+		Method: fsm.SetNodeProperties,
+		SetNodeProperties: []fsm.SetNodeProperty{
+			{
+				Type:       set.Type,
+				ID:         set.ID,
+				Properties: set.Properties,
+			},
+		},
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return nil, err
+	}
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return nil, err
+	}
+	if err, ok := val.(error); ok {
+		return nil, err
+	}
+	return toNode(val.([]api.Node)[0]), nil
+}
+
+func (r *graphResolver) Del(ctx context.Context, obj *model.Graph, del model.Key) (bool, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return false, fmt.Errorf("authorization failed: readonly user")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cmd := &fsm.CMD{
+		Method: fsm.DelNodes,
+		DelNodes: []fsm.DelNode{
+			{
+				Type: del.Type,
+				ID:   del.ID,
+			},
+		},
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return false, err
+	}
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return false, err
+	}
+	if err, ok := val.(error); ok {
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *graphResolver) BulkAdd(ctx context.Context, obj *model.Graph, add []*model.AddNode) (bool, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return false, fmt.Errorf("authorization failed: readonly user")
+	}
+	var toAdd []fsm.AddNode
+	for _, a := range add {
+		if a.ID == nil {
+			id := uuid.New().String()
+			a.ID = &id
+		}
+		toAdd = append(toAdd, fsm.AddNode{
+			Type:       a.Type,
+			ID:         *a.ID,
+			Properties: a.Properties,
+		})
+	}
+	cmd := &fsm.CMD{
+		Method:   fsm.AddNodes,
+		AddNodes: toAdd,
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return false, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return false, err
+	}
+	if err, ok := val.(error); ok {
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *graphResolver) BulkSet(ctx context.Context, obj *model.Graph, set []*model.SetNode) (bool, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return false, fmt.Errorf("authorization failed: readonly user")
+	}
+	var setProperties []fsm.SetNodeProperty
+	for _, s := range set {
+		setProperties = append(setProperties, fsm.SetNodeProperty{
+			Type:       s.Type,
+			ID:         s.ID,
+			Properties: s.Properties,
+		})
+	}
+	cmd := &fsm.CMD{
+		Method:            fsm.SetNodeProperties,
+		SetNodeProperties: setProperties,
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return false, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return false, err
+	}
+	if err, ok := val.(error); ok {
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *graphResolver) BulkDel(ctx context.Context, obj *model.Graph, del []*model.Key) (bool, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return false, fmt.Errorf("authorization failed: readonly user")
+	}
+	var delNodes []fsm.DelNode
+	for _, d := range del {
+		delNodes = append(delNodes, fsm.DelNode{
+			Type: d.Type,
+			ID:   d.ID,
+		})
+	}
+	cmd := &fsm.CMD{
+		Method:   fsm.DelNodes,
+		DelNodes: delNodes,
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return false, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return false, err
+	}
+	if err, ok := val.(error); ok {
+		return false, err
+	}
+	return true, nil
+}
+
 func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[string]interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -221,295 +516,16 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 	}, nil
 }
 
-func (r *queryResolver) Types(ctx context.Context) ([]string, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.graph.NodeTypes(), nil
+func (r *queryResolver) Graph(ctx context.Context) (*model.Graph, error) {
+	return &model.Graph{}, nil
 }
 
-func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	n, err := r.graph.GetNode(key.Type, key.ID)
-	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
-	}
-	return toNode(n), nil
+func (r *queryResolver) Cluster(ctx context.Context) (*model.Cluster, error) {
+	return &model.Cluster{}, nil
 }
 
-func (r *queryResolver) List(ctx context.Context, filter model.Filter) (*model.Nodes, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	var nodes []*model.Node
-	limit := 25
-	skip := 0
-	if filter.Cursor != nil {
-		skp, err := r.parseCursor(*filter.Cursor)
-		if err != nil {
-			return nil, err
-		}
-		skip = skp
-	}
-	if filter.PageSize != nil {
-		limit = *filter.PageSize
-	}
-	if err := r.graph.RangeNodes(skip, filter.Type, func(node api.Node) bool {
-		if len(nodes) >= limit {
-			return false
-		}
-		skip++
-		for _, exp := range filter.Expressions {
-			if !eval(exp, node) {
-				return true
-			}
-		}
-		nodes = append(nodes, toNode(node))
-		return true
-	}); err != nil {
-		return nil, err
-	}
-	if len(nodes) > 0 {
-		if filter.OrderBy != nil && nodes[0].Properties[filter.OrderBy.Field] != nil {
-			sort.Slice(nodes, func(i, j int) bool {
-				if nodes[i].Properties[filter.OrderBy.Field] == nil {
-					return false
-				}
-				if nodes[j].Properties[filter.OrderBy.Field] == nil {
-					return true
-				}
-				if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
-					if val, err := cast.ToFloat64E(nodes[i].Properties[filter.OrderBy.Field]); err == nil {
-						return val < cast.ToFloat64(nodes[j].Properties[filter.OrderBy.Field])
-					}
-					return cast.ToString(nodes[i].Properties[filter.OrderBy.Field]) < cast.ToString(nodes[j].Properties[filter.OrderBy.Field])
-				}
-				if val, err := cast.ToFloat64E(nodes[i].Properties[filter.OrderBy.Field]); err == nil {
-					return val > cast.ToFloat64(nodes[j].Properties[filter.OrderBy.Field])
-				}
-				return cast.ToString(nodes[i].Properties[filter.OrderBy.Field]) > cast.ToString(nodes[j].Properties[filter.OrderBy.Field])
-			})
-		} else {
-			if filter.OrderBy != nil && filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
-				sort.Slice(nodes, func(i, j int) bool {
-					return nodes[i].ID < nodes[j].ID
-				})
-			} else {
-				sort.Slice(nodes, func(i, j int) bool {
-					return nodes[i].ID > nodes[j].ID
-				})
-			}
-		}
-	}
-	return &model.Nodes{
-		Cursor: r.createCursor(skip),
-		Nodes:  nodes,
-	}, nil
-}
-
-func (r *queryResolver) Size(ctx context.Context) (int, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.graph.Size(), nil
-}
-
-func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return nil, fmt.Errorf("authorization failed: readonly user")
-	}
-	if add.ID == nil {
-		id := uuid.New().String()
-		add.ID = &id
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	cmd := &fsm.CMD{
-		Method: fsm.AddNodes,
-		AddNodes: []fsm.AddNode{
-			{
-				Type:       add.Type,
-				ID:         *add.ID,
-				Properties: add.Properties,
-			},
-		},
-	}
-	bits, err := encode.Marshal(cmd)
-	if err != nil {
-		return nil, err
-	}
-	val, err := r.raft.Apply(bits)
-	if err != nil {
-		return nil, err
-	}
-	if err, ok := val.(error); ok {
-		return nil, err
-	}
-
-	return toNode(val.([]api.Node)[0]), nil
-}
-
-func (r *queryResolver) Set(ctx context.Context, set model.SetNode) (*model.Node, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return nil, fmt.Errorf("authorization failed: readonly user")
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	cmd := &fsm.CMD{
-		Method: fsm.SetNodeProperties,
-		SetNodeProperties: []fsm.SetNodeProperty{
-			{
-				Type:       set.Type,
-				ID:         set.ID,
-				Properties: set.Properties,
-			},
-		},
-	}
-	bits, err := encode.Marshal(cmd)
-	if err != nil {
-		return nil, err
-	}
-	val, err := r.raft.Apply(bits)
-	if err != nil {
-		return nil, err
-	}
-	if err, ok := val.(error); ok {
-		return nil, err
-	}
-	return toNode(val.([]api.Node)[0]), nil
-}
-
-func (r *queryResolver) Del(ctx context.Context, del model.Key) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	cmd := &fsm.CMD{
-		Method: fsm.DelNodes,
-		DelNodes: []fsm.DelNode{
-			{
-				Type: del.Type,
-				ID:   del.ID,
-			},
-		},
-	}
-	bits, err := encode.Marshal(cmd)
-	if err != nil {
-		return false, err
-	}
-	val, err := r.raft.Apply(bits)
-	if err != nil {
-		return false, err
-	}
-	if err, ok := val.(error); ok {
-		return false, err
-	}
-	return true, nil
-}
-
-func (r *queryResolver) BulkAdd(ctx context.Context, add []*model.AddNode) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
-	}
-	var toAdd []fsm.AddNode
-	for _, a := range add {
-		if a.ID == nil {
-			id := uuid.New().String()
-			a.ID = &id
-		}
-		toAdd = append(toAdd, fsm.AddNode{
-			Type:       a.Type,
-			ID:         *a.ID,
-			Properties: a.Properties,
-		})
-	}
-	cmd := &fsm.CMD{
-		Method:   fsm.AddNodes,
-		AddNodes: toAdd,
-	}
-	bits, err := encode.Marshal(cmd)
-	if err != nil {
-		return false, err
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	val, err := r.raft.Apply(bits)
-	if err != nil {
-		return false, err
-	}
-	if err, ok := val.(error); ok {
-		return false, err
-	}
-	return true, nil
-}
-
-func (r *queryResolver) BulkSet(ctx context.Context, set []*model.SetNode) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
-	}
-	var setProperties []fsm.SetNodeProperty
-	for _, s := range set {
-		setProperties = append(setProperties, fsm.SetNodeProperty{
-			Type:       s.Type,
-			ID:         s.ID,
-			Properties: s.Properties,
-		})
-	}
-	cmd := &fsm.CMD{
-		Method:            fsm.SetNodeProperties,
-		SetNodeProperties: setProperties,
-	}
-	bits, err := encode.Marshal(cmd)
-	if err != nil {
-		return false, err
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	val, err := r.raft.Apply(bits)
-	if err != nil {
-		return false, err
-	}
-	if err, ok := val.(error); ok {
-		return false, err
-	}
-	return true, nil
-}
-
-func (r *queryResolver) BulkDel(ctx context.Context, del []*model.Key) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
-	}
-	var delNodes []fsm.DelNode
-	for _, d := range del {
-		delNodes = append(delNodes, fsm.DelNode{
-			Type: d.Type,
-			ID:   d.ID,
-		})
-	}
-	cmd := &fsm.CMD{
-		Method:   fsm.DelNodes,
-		DelNodes: delNodes,
-	}
-	bits, err := encode.Marshal(cmd)
-	if err != nil {
-		return false, err
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	val, err := r.raft.Apply(bits)
-	if err != nil {
-		return false, err
-	}
-	if err, ok := val.(error); ok {
-		return false, err
-	}
-	return true, nil
-}
-
-func (r *queryResolver) AddPeer(ctx context.Context, peerID string, addr string) (bool, error) {
-	if err := r.raft.Join(peerID, addr); err != nil {
-		return false, stacktrace.Propagate(err, "failed to add peer: %s %s", peerID, addr)
-	}
-	return true, nil
+func (r *queryResolver) Admin(ctx context.Context) (*model.Admin, error) {
+	return &model.Admin{}, nil
 }
 
 func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error) {
@@ -564,6 +580,15 @@ func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Rel
 	return true, nil
 }
 
+// Admin returns generated.AdminResolver implementation.
+func (r *Resolver) Admin() generated.AdminResolver { return &adminResolver{r} }
+
+// Cluster returns generated.ClusterResolver implementation.
+func (r *Resolver) Cluster() generated.ClusterResolver { return &clusterResolver{r} }
+
+// Graph returns generated.GraphResolver implementation.
+func (r *Resolver) Graph() generated.GraphResolver { return &graphResolver{r} }
+
 // Node returns generated.NodeResolver implementation.
 func (r *Resolver) Node() generated.NodeResolver { return &nodeResolver{r} }
 
@@ -573,6 +598,9 @@ func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 // Relationship returns generated.RelationshipResolver implementation.
 func (r *Resolver) Relationship() generated.RelationshipResolver { return &relationshipResolver{r} }
 
+type adminResolver struct{ *Resolver }
+type clusterResolver struct{ *Resolver }
+type graphResolver struct{ *Resolver }
 type nodeResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type relationshipResolver struct{ *Resolver }

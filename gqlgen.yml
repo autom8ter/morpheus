@@ -78,5 +78,33 @@ models:
         resolver: true
       setProperties:
         resolver: true
-
-
+  Admin:
+    fields:
+      login:
+        resolver: true
+  Cluster:
+    fields:
+      addPeer:
+        resolver: true
+  Graph:
+    fields:
+      types:
+        resolver: true
+      get:
+        resolver: true
+      list:
+        resolver: true
+      size:
+        resolver: true
+      add:
+        resolver: true
+      set:
+        resolver: true
+      del:
+        resolver: true
+      bulkAdd:
+        resolver: true
+      bulkSet:
+        resolver: true
+      bulkDel:
+        resolver: true
