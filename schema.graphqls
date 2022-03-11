@@ -103,9 +103,7 @@ type Query {
   get(key: Key!): Node!
   list(filter: Filter!): Nodes!
   size: Int!
-}
 
-type Mutation {
   add(add: AddNode!): Node!
   set(set: SetNode!): Node!
   del(del: Key!): Boolean!

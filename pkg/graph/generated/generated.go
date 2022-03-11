@@ -36,7 +36,6 @@ type Config struct {
 }
 
 type ResolverRoot interface {
-	Mutation() MutationResolver
 	Node() NodeResolver
 	Query() QueryResolver
 	Relationship() RelationshipResolver
@@ -46,15 +45,6 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
-	Mutation struct {
-		Add     func(childComplexity int, add model.AddNode) int
-		BulkAdd func(childComplexity int, add []*model.AddNode) int
-		BulkDel func(childComplexity int, del []*model.Key) int
-		BulkSet func(childComplexity int, set []*model.SetNode) int
-		Del     func(childComplexity int, del model.Key) int
-		Set     func(childComplexity int, set model.SetNode) int
-	}
-
 	Node struct {
 		AddRelationship func(childComplexity int, direction model.Direction, relationship string, nodeKey model.Key) int
 		DelProperty     func(childComplexity int, key string) int
@@ -74,10 +64,16 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Get   func(childComplexity int, key model.Key) int
-		List  func(childComplexity int, filter model.Filter) int
-		Size  func(childComplexity int) int
-		Types func(childComplexity int) int
+		Add     func(childComplexity int, add model.AddNode) int
+		BulkAdd func(childComplexity int, add []*model.AddNode) int
+		BulkDel func(childComplexity int, del []*model.Key) int
+		BulkSet func(childComplexity int, set []*model.SetNode) int
+		Del     func(childComplexity int, del model.Key) int
+		Get     func(childComplexity int, key model.Key) int
+		List    func(childComplexity int, filter model.Filter) int
+		Set     func(childComplexity int, set model.SetNode) int
+		Size    func(childComplexity int) int
+		Types   func(childComplexity int) int
 	}
 
 	Relationship struct {
@@ -97,14 +93,6 @@ type ComplexityRoot struct {
 	}
 }
 
-type MutationResolver interface {
-	Add(ctx context.Context, add model.AddNode) (*model.Node, error)
-	Set(ctx context.Context, set model.SetNode) (*model.Node, error)
-	Del(ctx context.Context, del model.Key) (bool, error)
-	BulkAdd(ctx context.Context, add []*model.AddNode) (bool, error)
-	BulkSet(ctx context.Context, set []*model.SetNode) (bool, error)
-	BulkDel(ctx context.Context, del []*model.Key) (bool, error)
-}
 type NodeResolver interface {
 	Properties(ctx context.Context, obj *model.Node) (map[string]interface{}, error)
 	GetProperty(ctx context.Context, obj *model.Node, key string) (interface{}, error)
@@ -120,6 +108,12 @@ type QueryResolver interface {
 	Get(ctx context.Context, key model.Key) (*model.Node, error)
 	List(ctx context.Context, filter model.Filter) (*model.Nodes, error)
 	Size(ctx context.Context) (int, error)
+	Add(ctx context.Context, add model.AddNode) (*model.Node, error)
+	Set(ctx context.Context, set model.SetNode) (*model.Node, error)
+	Del(ctx context.Context, del model.Key) (bool, error)
+	BulkAdd(ctx context.Context, add []*model.AddNode) (bool, error)
+	BulkSet(ctx context.Context, set []*model.SetNode) (bool, error)
+	BulkDel(ctx context.Context, del []*model.Key) (bool, error)
 }
 type RelationshipResolver interface {
 	Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error)
@@ -141,78 +135,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 	ec := executionContext{nil, e}
 	_ = ec
 	switch typeName + "." + field {
-
-	case "Mutation.add":
-		if e.complexity.Mutation.Add == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_add_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Mutation.Add(childComplexity, args["add"].(model.AddNode)), true
-
-	case "Mutation.bulkAdd":
-		if e.complexity.Mutation.BulkAdd == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_bulkAdd_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Mutation.BulkAdd(childComplexity, args["add"].([]*model.AddNode)), true
-
-	case "Mutation.bulkDel":
-		if e.complexity.Mutation.BulkDel == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_bulkDel_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Mutation.BulkDel(childComplexity, args["del"].([]*model.Key)), true
-
-	case "Mutation.bulkSet":
-		if e.complexity.Mutation.BulkSet == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_bulkSet_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Mutation.BulkSet(childComplexity, args["set"].([]*model.SetNode)), true
-
-	case "Mutation.del":
-		if e.complexity.Mutation.Del == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_del_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Mutation.Del(childComplexity, args["del"].(model.Key)), true
-
-	case "Mutation.set":
-		if e.complexity.Mutation.Set == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_set_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Mutation.Set(childComplexity, args["set"].(model.SetNode)), true
 
 	case "Node.addRelationship":
 		if e.complexity.Node.AddRelationship == nil {
@@ -333,6 +255,66 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Nodes.Nodes(childComplexity), true
 
+	case "Query.add":
+		if e.complexity.Query.Add == nil {
+			break
+		}
+
+		args, err := ec.field_Query_add_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Add(childComplexity, args["add"].(model.AddNode)), true
+
+	case "Query.bulkAdd":
+		if e.complexity.Query.BulkAdd == nil {
+			break
+		}
+
+		args, err := ec.field_Query_bulkAdd_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.BulkAdd(childComplexity, args["add"].([]*model.AddNode)), true
+
+	case "Query.bulkDel":
+		if e.complexity.Query.BulkDel == nil {
+			break
+		}
+
+		args, err := ec.field_Query_bulkDel_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.BulkDel(childComplexity, args["del"].([]*model.Key)), true
+
+	case "Query.bulkSet":
+		if e.complexity.Query.BulkSet == nil {
+			break
+		}
+
+		args, err := ec.field_Query_bulkSet_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.BulkSet(childComplexity, args["set"].([]*model.SetNode)), true
+
+	case "Query.del":
+		if e.complexity.Query.Del == nil {
+			break
+		}
+
+		args, err := ec.field_Query_del_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Del(childComplexity, args["del"].(model.Key)), true
+
 	case "Query.get":
 		if e.complexity.Query.Get == nil {
 			break
@@ -356,6 +338,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.List(childComplexity, args["filter"].(model.Filter)), true
+
+	case "Query.set":
+		if e.complexity.Query.Set == nil {
+			break
+		}
+
+		args, err := ec.field_Query_set_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Set(childComplexity, args["set"].(model.SetNode)), true
 
 	case "Query.size":
 		if e.complexity.Query.Size == nil {
@@ -473,20 +467,6 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			}
 			first = false
 			data := ec._Query(ctx, rc.Operation.SelectionSet)
-			var buf bytes.Buffer
-			data.MarshalGQL(&buf)
-
-			return &graphql.Response{
-				Data: buf.Bytes(),
-			}
-		}
-	case ast.Mutation:
-		return func(ctx context.Context) *graphql.Response {
-			if !first {
-				return nil
-			}
-			first = false
-			data := ec._Mutation(ctx, rc.Operation.SelectionSet)
 			var buf bytes.Buffer
 			data.MarshalGQL(&buf)
 
@@ -625,9 +605,7 @@ type Query {
   get(key: Key!): Node!
   list(filter: Filter!): Nodes!
   size: Int!
-}
 
-type Mutation {
   add(add: AddNode!): Node!
   set(set: SetNode!): Node!
   del(del: Key!): Boolean!
@@ -642,96 +620,6 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // endregion ************************** generated!.gotpl **************************
 
 // region    ***************************** args.gotpl *****************************
-
-func (ec *executionContext) field_Mutation_add_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 model.AddNode
-	if tmp, ok := rawArgs["add"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("add"))
-		arg0, err = ec.unmarshalNAddNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["add"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_bulkAdd_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []*model.AddNode
-	if tmp, ok := rawArgs["add"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("add"))
-		arg0, err = ec.unmarshalOAddNode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNodeᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["add"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_bulkDel_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []*model.Key
-	if tmp, ok := rawArgs["del"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("del"))
-		arg0, err = ec.unmarshalOKey2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKeyᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["del"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_bulkSet_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []*model.SetNode
-	if tmp, ok := rawArgs["set"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("set"))
-		arg0, err = ec.unmarshalOSetNode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNodeᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["set"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_del_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 model.Key
-	if tmp, ok := rawArgs["del"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("del"))
-		arg0, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["del"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_set_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 model.SetNode
-	if tmp, ok := rawArgs["set"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("set"))
-		arg0, err = ec.unmarshalNSetNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNode(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["set"] = arg0
-	return args, nil
-}
 
 func (ec *executionContext) field_Node_addRelationship_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
@@ -907,6 +795,81 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_add_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.AddNode
+	if tmp, ok := rawArgs["add"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("add"))
+		arg0, err = ec.unmarshalNAddNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["add"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_bulkAdd_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 []*model.AddNode
+	if tmp, ok := rawArgs["add"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("add"))
+		arg0, err = ec.unmarshalOAddNode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNodeᚄ(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["add"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_bulkDel_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 []*model.Key
+	if tmp, ok := rawArgs["del"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("del"))
+		arg0, err = ec.unmarshalOKey2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKeyᚄ(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["del"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_bulkSet_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 []*model.SetNode
+	if tmp, ok := rawArgs["set"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("set"))
+		arg0, err = ec.unmarshalOSetNode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNodeᚄ(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["set"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_del_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.Key
+	if tmp, ok := rawArgs["del"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("del"))
+		arg0, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["del"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_get_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -934,6 +897,21 @@ func (ec *executionContext) field_Query_list_args(ctx context.Context, rawArgs m
 		}
 	}
 	args["filter"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_set_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.SetNode
+	if tmp, ok := rawArgs["set"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("set"))
+		arg0, err = ec.unmarshalNSetNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNode(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["set"] = arg0
 	return args, nil
 }
 
@@ -1019,258 +997,6 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 // endregion ************************** directives.gotpl **************************
 
 // region    **************************** field.gotpl *****************************
-
-func (ec *executionContext) _Mutation_add(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Mutation_add_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().Add(rctx, args["add"].(model.AddNode))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(*model.Node)
-	fc.Result = res
-	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Mutation_set(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Mutation_set_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().Set(rctx, args["set"].(model.SetNode))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(*model.Node)
-	fc.Result = res
-	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Mutation_del(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Mutation_del_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().Del(rctx, args["del"].(model.Key))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(bool)
-	fc.Result = res
-	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Mutation_bulkAdd(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Mutation_bulkAdd_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().BulkAdd(rctx, args["add"].([]*model.AddNode))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(bool)
-	fc.Result = res
-	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Mutation_bulkSet(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Mutation_bulkSet_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().BulkSet(rctx, args["set"].([]*model.SetNode))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(bool)
-	fc.Result = res
-	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Mutation_bulkDel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Mutation_bulkDel_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().BulkDel(rctx, args["del"].([]*model.Key))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(bool)
-	fc.Result = res
-	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
-}
 
 func (ec *executionContext) _Node_id(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
 	defer func() {
@@ -1884,6 +1610,258 @@ func (ec *executionContext) _Query_size(ctx context.Context, field graphql.Colle
 	res := resTmp.(int)
 	fc.Result = res
 	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_add(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_add_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Add(rctx, args["add"].(model.AddNode))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Node)
+	fc.Result = res
+	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_set(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_set_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Set(rctx, args["set"].(model.SetNode))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Node)
+	fc.Result = res
+	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_del(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_del_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Del(rctx, args["del"].(model.Key))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_bulkAdd(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_bulkAdd_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().BulkAdd(rctx, args["add"].([]*model.AddNode))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_bulkSet(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_bulkSet_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().BulkSet(rctx, args["set"].([]*model.SetNode))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_bulkDel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_bulkDel_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().BulkDel(rctx, args["del"].([]*model.Key))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -3773,96 +3751,6 @@ func (ec *executionContext) _Entity(ctx context.Context, sel ast.SelectionSet, o
 
 // region    **************************** object.gotpl ****************************
 
-var mutationImplementors = []string{"Mutation"}
-
-func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, mutationImplementors)
-	ctx = graphql.WithFieldContext(ctx, &graphql.FieldContext{
-		Object: "Mutation",
-	})
-
-	out := graphql.NewFieldSet(fields)
-	var invalids uint32
-	for i, field := range fields {
-		innerCtx := graphql.WithRootFieldContext(ctx, &graphql.RootFieldContext{
-			Object: field.Name,
-			Field:  field,
-		})
-
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("Mutation")
-		case "add":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_add(ctx, field)
-			}
-
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "set":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_set(ctx, field)
-			}
-
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "del":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_del(ctx, field)
-			}
-
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "bulkAdd":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_bulkAdd(ctx, field)
-			}
-
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "bulkSet":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_bulkSet(ctx, field)
-			}
-
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "bulkDel":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_bulkDel(ctx, field)
-			}
-
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, innerFunc)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch()
-	if invalids > 0 {
-		return graphql.Null
-	}
-	return out
-}
-
 var nodeImplementors = []string{"Node", "Entity"}
 
 func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj *model.Node) graphql.Marshaler {
@@ -4184,6 +4072,144 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_size(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return rrm(innerCtx)
+			})
+		case "add":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_add(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return rrm(innerCtx)
+			})
+		case "set":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_set(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return rrm(innerCtx)
+			})
+		case "del":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_del(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return rrm(innerCtx)
+			})
+		case "bulkAdd":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_bulkAdd(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return rrm(innerCtx)
+			})
+		case "bulkSet":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_bulkSet(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return rrm(innerCtx)
+			})
+		case "bulkDel":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_bulkDel(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}

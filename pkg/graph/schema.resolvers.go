@@ -6,7 +6,6 @@ package graph
 import (
 	"context"
 	"fmt"
-	"github.com/palantir/stacktrace"
 	"sort"
 
 	"github.com/autom8ter/morpheus/pkg/api"
@@ -16,201 +15,9 @@ import (
 	"github.com/autom8ter/morpheus/pkg/graph/model"
 	"github.com/autom8ter/morpheus/pkg/raft/fsm"
 	"github.com/google/uuid"
+	"github.com/palantir/stacktrace"
 	"github.com/spf13/cast"
 )
-
-func (r *mutationResolver) Add(ctx context.Context, add model.AddNode) (*model.Node, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return nil, fmt.Errorf("authorization failed: readonly user")
-	}
-	if add.ID == nil {
-		id := uuid.New().String()
-		add.ID = &id
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	cmd := &fsm.CMD{
-		Method: fsm.AddNodes,
-		AddNodes: []fsm.AddNode{
-			{
-				Type:       add.Type,
-				ID:         *add.ID,
-				Properties: add.Properties,
-			},
-		},
-	}
-	bits, err := encode.Marshal(cmd)
-	if err != nil {
-		return nil, err
-	}
-	val, err := r.raft.Apply(bits)
-	if err != nil {
-		return nil, err
-	}
-	if err, ok := val.(error); ok {
-		return nil, err
-	}
-
-	return toNode(val.([]api.Node)[0]), nil
-}
-
-func (r *mutationResolver) Set(ctx context.Context, set model.SetNode) (*model.Node, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return nil, fmt.Errorf("authorization failed: readonly user")
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	cmd := &fsm.CMD{
-		Method: fsm.SetNodeProperties,
-		SetNodeProperties: []fsm.SetNodeProperty{
-			{
-				Type:       set.Type,
-				ID:         set.ID,
-				Properties: set.Properties,
-			},
-		},
-	}
-	bits, err := encode.Marshal(cmd)
-	if err != nil {
-		return nil, err
-	}
-	val, err := r.raft.Apply(bits)
-	if err != nil {
-		return nil, err
-	}
-	if err, ok := val.(error); ok {
-		return nil, err
-	}
-	return toNode(val.([]api.Node)[0]), nil
-}
-
-func (r *mutationResolver) Del(ctx context.Context, del model.Key) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	cmd := &fsm.CMD{
-		Method: fsm.DelNodes,
-		DelNodes: []fsm.DelNode{
-			{
-				Type: del.Type,
-				ID:   del.ID,
-			},
-		},
-	}
-	bits, err := encode.Marshal(cmd)
-	if err != nil {
-		return false, err
-	}
-	val, err := r.raft.Apply(bits)
-	if err != nil {
-		return false, err
-	}
-	if err, ok := val.(error); ok {
-		return false, err
-	}
-	return true, nil
-}
-
-func (r *mutationResolver) BulkAdd(ctx context.Context, add []*model.AddNode) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
-	}
-	var toAdd []fsm.AddNode
-	for _, a := range add {
-		if a.ID == nil {
-			id := uuid.New().String()
-			a.ID = &id
-		}
-		toAdd = append(toAdd, fsm.AddNode{
-			Type:       a.Type,
-			ID:         *a.ID,
-			Properties: a.Properties,
-		})
-	}
-	cmd := &fsm.CMD{
-		Method:   fsm.AddNodes,
-		AddNodes: toAdd,
-	}
-	bits, err := encode.Marshal(cmd)
-	if err != nil {
-		return false, err
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	val, err := r.raft.Apply(bits)
-	if err != nil {
-		return false, err
-	}
-	if err, ok := val.(error); ok {
-		return false, err
-	}
-	return true, nil
-}
-
-func (r *mutationResolver) BulkSet(ctx context.Context, set []*model.SetNode) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
-	}
-	var setProperties []fsm.SetNodeProperty
-	for _, s := range set {
-		setProperties = append(setProperties, fsm.SetNodeProperty{
-			Type:       s.Type,
-			ID:         s.ID,
-			Properties: s.Properties,
-		})
-	}
-	cmd := &fsm.CMD{
-		Method:            fsm.SetNodeProperties,
-		SetNodeProperties: setProperties,
-	}
-	bits, err := encode.Marshal(cmd)
-	if err != nil {
-		return false, err
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	val, err := r.raft.Apply(bits)
-	if err != nil {
-		return false, err
-	}
-	if err, ok := val.(error); ok {
-		return false, err
-	}
-	return true, nil
-}
-
-func (r *mutationResolver) BulkDel(ctx context.Context, del []*model.Key) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
-	}
-	var delNodes []fsm.DelNode
-	for _, d := range del {
-		delNodes = append(delNodes, fsm.DelNode{
-			Type: d.Type,
-			ID:   d.ID,
-		})
-	}
-	cmd := &fsm.CMD{
-		Method:   fsm.DelNodes,
-		DelNodes: delNodes,
-	}
-	bits, err := encode.Marshal(cmd)
-	if err != nil {
-		return false, err
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	val, err := r.raft.Apply(bits)
-	if err != nil {
-		return false, err
-	}
-	if err, ok := val.(error); ok {
-		return false, err
-	}
-	return true, nil
-}
 
 func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[string]interface{}, error) {
 	r.mu.RLock()
@@ -505,6 +312,199 @@ func (r *queryResolver) Size(ctx context.Context) (int, error) {
 	return r.graph.Size(), nil
 }
 
+func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return nil, fmt.Errorf("authorization failed: readonly user")
+	}
+	if add.ID == nil {
+		id := uuid.New().String()
+		add.ID = &id
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cmd := &fsm.CMD{
+		Method: fsm.AddNodes,
+		AddNodes: []fsm.AddNode{
+			{
+				Type:       add.Type,
+				ID:         *add.ID,
+				Properties: add.Properties,
+			},
+		},
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return nil, err
+	}
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return nil, err
+	}
+	if err, ok := val.(error); ok {
+		return nil, err
+	}
+
+	return toNode(val.([]api.Node)[0]), nil
+}
+
+func (r *queryResolver) Set(ctx context.Context, set model.SetNode) (*model.Node, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return nil, fmt.Errorf("authorization failed: readonly user")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cmd := &fsm.CMD{
+		Method: fsm.SetNodeProperties,
+		SetNodeProperties: []fsm.SetNodeProperty{
+			{
+				Type:       set.Type,
+				ID:         set.ID,
+				Properties: set.Properties,
+			},
+		},
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return nil, err
+	}
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return nil, err
+	}
+	if err, ok := val.(error); ok {
+		return nil, err
+	}
+	return toNode(val.([]api.Node)[0]), nil
+}
+
+func (r *queryResolver) Del(ctx context.Context, del model.Key) (bool, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return false, fmt.Errorf("authorization failed: readonly user")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cmd := &fsm.CMD{
+		Method: fsm.DelNodes,
+		DelNodes: []fsm.DelNode{
+			{
+				Type: del.Type,
+				ID:   del.ID,
+			},
+		},
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return false, err
+	}
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return false, err
+	}
+	if err, ok := val.(error); ok {
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *queryResolver) BulkAdd(ctx context.Context, add []*model.AddNode) (bool, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return false, fmt.Errorf("authorization failed: readonly user")
+	}
+	var toAdd []fsm.AddNode
+	for _, a := range add {
+		if a.ID == nil {
+			id := uuid.New().String()
+			a.ID = &id
+		}
+		toAdd = append(toAdd, fsm.AddNode{
+			Type:       a.Type,
+			ID:         *a.ID,
+			Properties: a.Properties,
+		})
+	}
+	cmd := &fsm.CMD{
+		Method:   fsm.AddNodes,
+		AddNodes: toAdd,
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return false, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return false, err
+	}
+	if err, ok := val.(error); ok {
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *queryResolver) BulkSet(ctx context.Context, set []*model.SetNode) (bool, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return false, fmt.Errorf("authorization failed: readonly user")
+	}
+	var setProperties []fsm.SetNodeProperty
+	for _, s := range set {
+		setProperties = append(setProperties, fsm.SetNodeProperty{
+			Type:       s.Type,
+			ID:         s.ID,
+			Properties: s.Properties,
+		})
+	}
+	cmd := &fsm.CMD{
+		Method:            fsm.SetNodeProperties,
+		SetNodeProperties: setProperties,
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return false, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return false, err
+	}
+	if err, ok := val.(error); ok {
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *queryResolver) BulkDel(ctx context.Context, del []*model.Key) (bool, error) {
+	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
+		return false, fmt.Errorf("authorization failed: readonly user")
+	}
+	var delNodes []fsm.DelNode
+	for _, d := range del {
+		delNodes = append(delNodes, fsm.DelNode{
+			Type: d.Type,
+			ID:   d.ID,
+		})
+	}
+	cmd := &fsm.CMD{
+		Method:   fsm.DelNodes,
+		DelNodes: delNodes,
+	}
+	bits, err := encode.Marshal(cmd)
+	if err != nil {
+		return false, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	val, err := r.raft.Apply(bits)
+	if err != nil {
+		return false, err
+	}
+	if err, ok := val.(error); ok {
+		return false, err
+	}
+	return true, nil
+}
+
 func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -557,9 +557,6 @@ func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Rel
 	return true, nil
 }
 
-// Mutation returns generated.MutationResolver implementation.
-func (r *Resolver) Mutation() generated.MutationResolver { return &mutationResolver{r} }
-
 // Node returns generated.NodeResolver implementation.
 func (r *Resolver) Node() generated.NodeResolver { return &nodeResolver{r} }
 
@@ -569,7 +566,6 @@ func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 // Relationship returns generated.RelationshipResolver implementation.
 func (r *Resolver) Relationship() generated.RelationshipResolver { return &relationshipResolver{r} }
 
-type mutationResolver struct{ *Resolver }
 type nodeResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type relationshipResolver struct{ *Resolver }
