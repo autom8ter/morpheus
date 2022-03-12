@@ -18,10 +18,6 @@ type AddNode struct {
 	Properties map[string]interface{} `json:"properties"`
 }
 
-type Admin struct {
-	Login string `json:"login"`
-}
-
 type Cluster struct {
 	AddPeer bool `json:"addPeer"`
 }

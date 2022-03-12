@@ -5,6 +5,8 @@ package graph
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"sort"
 
@@ -18,10 +20,6 @@ import (
 	"github.com/palantir/stacktrace"
 	"github.com/spf13/cast"
 )
-
-func (r *adminResolver) Login(ctx context.Context, obj *model.Admin, username string, password string) (string, error) {
-	panic(fmt.Errorf("not implemented"))
-}
 
 func (r *clusterResolver) AddPeer(ctx context.Context, obj *model.Cluster, peerID string, addr string) (bool, error) {
 	if err := r.raft.Join(peerID, addr); err != nil {
@@ -380,10 +378,12 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, dir
 
 func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, nodeKey model.Key) (*model.Relationship, error) {
 	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return nil, fmt.Errorf("authorization failed: readonly user")
+		return nil, stacktrace.NewError("authorization failed: readonly user")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	h := sha1.New()
+	h.Write([]byte(fmt.Sprintf("%s_%s_%s_%s_%s_%s", obj.Type, obj.ID, direction, relationship, nodeKey.Type, nodeKey.ID)))
 	cmd := &fsm.CMD{
 		Method: fsm.AddRelationships,
 		AddRelationships: []fsm.AddRelationship{
@@ -392,7 +392,7 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, dir
 				NodeID:         obj.ID,
 				Direction:      string(direction),
 				Relationship:   relationship,
-				RelationshipID: uuid.NewString(),
+				RelationshipID: hex.EncodeToString(h.Sum(nil)),
 				Node2Type:      nodeKey.Type,
 				Node2ID:        nodeKey.ID,
 			},
@@ -524,10 +524,6 @@ func (r *queryResolver) Cluster(ctx context.Context) (*model.Cluster, error) {
 	return &model.Cluster{}, nil
 }
 
-func (r *queryResolver) Admin(ctx context.Context) (*model.Admin, error) {
-	return &model.Admin{}, nil
-}
-
 func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -580,9 +576,6 @@ func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Rel
 	return true, nil
 }
 
-// Admin returns generated.AdminResolver implementation.
-func (r *Resolver) Admin() generated.AdminResolver { return &adminResolver{r} }
-
 // Cluster returns generated.ClusterResolver implementation.
 func (r *Resolver) Cluster() generated.ClusterResolver { return &clusterResolver{r} }
 
@@ -598,7 +591,6 @@ func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 // Relationship returns generated.RelationshipResolver implementation.
 func (r *Resolver) Relationship() generated.RelationshipResolver { return &relationshipResolver{r} }
 
-type adminResolver struct{ *Resolver }
 type clusterResolver struct{ *Resolver }
 type graphResolver struct{ *Resolver }
 type nodeResolver struct{ *Resolver }

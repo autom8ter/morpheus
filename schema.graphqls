@@ -105,10 +105,6 @@ input SetNode {
   properties: Map
 }
 
-type Admin {
-  login(username: String!, password: String!): String!
-}
-
 type Cluster {
   addPeer(peerID: String!, addr: String!): Boolean!
 }
@@ -130,5 +126,4 @@ type Graph {
 type Query {
   graph: Graph!
   cluster: Cluster!
-  admin: Admin!
 }
