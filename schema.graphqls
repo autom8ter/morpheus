@@ -105,11 +105,7 @@ input SetNode {
   properties: Map
 }
 
-type Cluster {
-  addPeer(peerID: String!, addr: String!): Boolean!
-}
-
-type Graph {
+type Query {
   types: [String!]
   get(key: Key!): Node!
   list(filter: Filter!): Nodes!
@@ -121,9 +117,4 @@ type Graph {
   bulkAdd(add: [AddNode!]): Boolean!
   bulkSet(set: [SetNode!]): Boolean!
   bulkDel(del: [Key!]): Boolean!
-}
-
-type Query {
-  graph: Graph!
-  cluster: Cluster!
 }

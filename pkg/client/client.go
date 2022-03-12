@@ -14,38 +14,40 @@ type Client struct {
 
 func NewClient(username, password, endpoint string, timeout time.Duration) *Client {
 	client := &http.Client{
-		Transport: basicAuthTransport{
-			username: username,
-			password: password,
+		Transport: &basicAuthTransport{
+			username:  username,
+			password:  password,
+			transport: http.DefaultTransport,
 		},
 		Timeout: timeout,
 	}
-	client.Transport = basicAuthTransport{
-		username: username,
-		password: password,
+	gclient := graphql.NewClient(endpoint, graphql.WithHTTPClient(client))
+	return &Client{
+		client: gclient,
 	}
-	return &Client{client: graphql.NewClient(endpoint, graphql.WithHTTPClient(client))}
 }
 
-func (c *Client) Query(ctx context.Context, query string, vars map[string]string, resp interface{}) error {
+func (c *Client) Query(ctx context.Context, query string, vars map[string]string) (map[string]interface{}, error) {
 	req := graphql.NewRequest(query)
 	if vars != nil {
 		for k, v := range vars {
 			req.Var(k, v)
 		}
 	}
-	if err := c.client.Run(ctx, req, resp); err != nil {
-		return stacktrace.Propagate(err, "failed to do request")
+	resp := map[string]interface{}{}
+	if err := c.client.Run(ctx, req, &resp); err != nil {
+		return nil, stacktrace.Propagate(err, "failed to do request")
 	}
-	return nil
+	return resp, nil
 }
 
 type basicAuthTransport struct {
-	username string
-	password string
+	username  string
+	password  string
+	transport http.RoundTripper
 }
 
-func (b basicAuthTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+func (b *basicAuthTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	request.SetBasicAuth(b.username, b.password)
-	return http.DefaultTransport.RoundTrip(request)
+	return b.transport.RoundTrip(request)
 }

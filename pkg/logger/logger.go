@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"bytes"
 	"github.com/autom8ter/morpheus/pkg/version"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -83,13 +84,44 @@ func toFields(fields map[string]interface{}) []zap.Field {
 func Middleware(lgger *Logger, handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
+		ww := &responseWriterWrapper{w: w}
 		defer func() {
 			lgger.Info("http request/response", map[string]interface{}{
-				"url":        r.URL.String(),
-				"method":     r.Method,
-				"elapsed_ns": time.Since(now).Nanoseconds(),
+				"url":             r.URL.String(),
+				"method":          r.Method,
+				"elapsed_ns":      time.Since(now).Nanoseconds(),
+				"response_status": ww.StatusCode(),
+				"response_body":   ww.Body(),
 			})
 		}()
-		handler.ServeHTTP(w, r)
+		handler.ServeHTTP(ww, r)
 	})
+}
+
+type responseWriterWrapper struct {
+	w          http.ResponseWriter
+	body       bytes.Buffer
+	statusCode int
+}
+
+func (i *responseWriterWrapper) Header() http.Header {
+	return i.w.Header()
+}
+
+func (i *responseWriterWrapper) Write(buf []byte) (int, error) {
+	i.body.Write(buf)
+	return i.w.Write(buf)
+}
+
+func (i *responseWriterWrapper) WriteHeader(statusCode int) {
+	i.statusCode = statusCode
+	i.w.WriteHeader(statusCode)
+}
+
+func (i *responseWriterWrapper) Body() string {
+	return i.body.String()
+}
+
+func (i *responseWriterWrapper) StatusCode() int {
+	return i.statusCode
 }

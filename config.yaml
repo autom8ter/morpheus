@@ -6,7 +6,7 @@ database:
   # storage_path: ./.morpheus
 features:
   introspection: true
-  log_queries: false
+  log_queries: true
   apollo_tracing: false
 
 #auth:

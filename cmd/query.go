@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	client2 "github.com/autom8ter/morpheus/pkg/client"
 	"github.com/palantir/stacktrace"
@@ -36,14 +37,22 @@ func getQueryCmd() *cobra.Command {
 				fmt.Println("empty query")
 				return
 			}
+			// fmt.Println(query)
 			client := client2.NewClient(user, password, endpoint, timeout)
-			resp := map[string]interface{}{}
-			if err := client.Query(context.Background(), query, vars, resp); err != nil {
-				fmt.Println(err)
+			resp, err := client.Query(context.Background(), query, vars)
+			if err != nil {
+				fmt.Println(stacktrace.Propagate(err, ""))
+				return
 			}
+			bits, err := json.MarshalIndent(resp, "", "    ")
+			if err != nil {
+				fmt.Println(stacktrace.Propagate(err, ""))
+				return
+			}
+			fmt.Println(string(bits))
 		},
 	}
-	queryCmd.Flags().StringVarP(&endpoint, "", "e", "http://localhost:8080", "server endpoint")
+	queryCmd.Flags().StringVarP(&endpoint, "", "e", "http://localhost:8080/query", "server endpoint")
 	queryCmd.Flags().StringVarP(&user, "username", "u", "", "basic auth username")
 	queryCmd.Flags().StringVarP(&password, "password", "p", "", "basic auth password")
 	queryCmd.Flags().StringVarP(&file, "file", "f", "", "load query from graphql file path")
