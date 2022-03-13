@@ -17,49 +17,46 @@ func NewMiddleware(config *config.Config) *Middleware {
 	return &Middleware{config: config}
 }
 
-func (m *Middleware) Wrap(handler http.Handler, require bool) http.Handler {
+func (m *Middleware) Wrap(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()
 		bearToken := req.Header.Get("Authorization")
 		token := strings.TrimPrefix(bearToken, "Bearer ")
 		now := time.Now()
 		w := &responseWriterWrapper{w: writer}
+		logFields := map[string]interface{}{
+			"url":    req.URL.String(),
+			"method": req.Method,
+		}
 		defer func() {
-			body := w.Body()
-			fields := map[string]interface{}{
-				"url":             req.URL.String(),
-				"method":          req.Method,
-				"elapsed_ns":      time.Since(now).Nanoseconds(),
-				"response_status": w.StatusCode(),
-				"response_body":   body,
+			if w.statusCode == 0 {
+				w.statusCode = 200
 			}
-			logger.L.Info("http request/response", fields)
+			//logFields["response_body"] = w.Body()
+			logFields["response_status"] = w.StatusCode()
+			logFields["elapsed_ns"] = time.Since(now).Nanoseconds()
+			logger.L.Info("http request/response", logFields)
 		}()
 
-		if token == "" && !require {
+		if token == "" {
 			handler.ServeHTTP(w, req.WithContext(ctx))
 			return
 		}
-		if token != "" {
-			ctx = context.WithValue(ctx, tokenCtxKey, token)
-		}
+		ctx = context.WithValue(ctx, tokenCtxKey, token)
 		claims, err := m.parseClaims(token)
 		if err != nil {
-			logger.L.HTTPError(w, "failed to parse Authorization token", err, http.StatusUnauthorized)
-			return
+			logger.L.Error("failed to parse Authorization token", map[string]interface{}{
+				"error": err,
+			})
 		}
-
-		for _, usr := range m.config.Auth.Users {
-			if usr.Username == claims["sub"] {
-				ctx = context.WithValue(ctx, userCtxKey, usr)
-				handler.ServeHTTP(w, req.WithContext(ctx))
-				return
+		if claims != nil {
+			for _, usr := range m.config.Auth.Users {
+				if usr.Username == claims["sub"] {
+					logFields["user"] = usr.Username
+					ctx = context.WithValue(ctx, userCtxKey, usr)
+				}
 			}
 		}
-		if require {
-			logger.L.HTTPError(w, "failed to authenticate", err, http.StatusUnauthorized)
-			return
-		}
-		handler.ServeHTTP(w, req)
+		handler.ServeHTTP(w, req.WithContext(ctx))
 	})
 }

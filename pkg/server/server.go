@@ -76,7 +76,6 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 	srv := handler.NewDefaultServer(schema)
 	srv.SetQueryCache(lru.New(1000))
 	mux := http.NewServeMux()
-
 	if cfg.Features != nil {
 		if cfg.Features.Introspection {
 			srv.Use(extension.Introspection{})
@@ -84,6 +83,7 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 		if cfg.Features.ApolloTracing {
 			srv.Use(apollotracing.Tracer{})
 		}
+		//srv.Use(extension.AutomaticPersistedQuery{})
 		if cfg.Features.LogQueries {
 			srv.AroundOperations(func(ctx context.Context, next graphql.OperationHandler) graphql.ResponseHandler {
 				oc := graphql.GetOperationContext(ctx)
@@ -98,7 +98,7 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 
 	mux.Handle("/", playground.Handler("GraphQL Console", "/query"))
 
-	mux.Handle("/query", mw.Wrap(srv, false))
+	mux.Handle("/query", mw.Wrap(srv))
 
 	server := &http.Server{Handler: mux}
 
