@@ -1,3 +1,6 @@
 package constants
 
-const JWTAudience = "morpheus"
+const (
+	JWTAudience = "morpheus"
+	ProjectName = "morpheus"
+)

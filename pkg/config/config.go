@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/logger"
 	"github.com/spf13/viper"
 	"os"
@@ -18,14 +19,25 @@ type Config struct {
 func LoadConfig(configFile string) (*Config, error) {
 	homedir, _ := os.UserHomeDir()
 	viper.AutomaticEnv()
-	viper.SetDefault("server.graphql_port", 8080)
-	viper.SetDefault("server.raft_port", 7598)
+	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("database.storage_path", fmt.Sprintf("%s/.morpheus", homedir))
 	viper.SetDefault("features.log_queries", false)
 	viper.SetDefault("features.introspection", false)
 	viper.SetDefault("features.apollo_tracing", false)
 	viper.SetDefault("features.playground", true)
 	viper.SetDefault("server.raft_cluster", "")
+
+	viper.SetDefault("auth.signing_secret", "default_secret")
+	viper.SetDefault("auth.token_ttl", 24*time.Hour)
+	viper.SetDefault("auth.users", []interface{}{
+		User{
+			Username: constants.ProjectName,
+			Password: constants.ProjectName,
+			Roles: []Role{
+				ADMIN,
+			},
+		},
+	})
 	viper.SetConfigFile(configFile)
 	if err := viper.ReadInConfig(); err != nil {
 		logger.L.Info("missing config file", map[string]interface{}{

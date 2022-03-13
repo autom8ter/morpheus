@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/autom8ter/morpheus/pkg/config"
+	"github.com/autom8ter/morpheus/pkg/helpers"
 	"sort"
 
 	"github.com/autom8ter/morpheus/pkg/api"
@@ -555,6 +556,13 @@ func (r *queryResolver) Login(ctx context.Context, username string, password str
 	token, err := r.auth.Login(username, password)
 	if err != nil {
 		return "", stacktrace.Propagate(err, "")
+	}
+	expired, _, err := helpers.JWTExpired(token)
+	if err != nil {
+		return "", stacktrace.Propagate(err, "")
+	}
+	if expired {
+		return "", stacktrace.NewError("expired jwt (internal): %s", token)
 	}
 	return token, nil
 }

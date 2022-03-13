@@ -28,7 +28,7 @@ func (a *Auth) RequireRole(ctx context.Context, role config.Role) (config.User, 
 		return config.User{}, stacktrace.Propagate(constants.ErrUnauthorized, "no context user")
 	}
 	for _, usrRole := range usr.Roles {
-		if usrRole == role {
+		if usrRole == role || usrRole == config.ADMIN {
 			return usr, nil
 		}
 	}

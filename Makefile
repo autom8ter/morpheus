@@ -14,3 +14,6 @@ test-storage:
 
 query-size:
 	@go run main.go query -f examples/queries/size.graphql
+
+query-login:
+	@go run main.go query -f examples/queries/login.graphql

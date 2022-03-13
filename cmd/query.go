@@ -38,14 +38,15 @@ func getQueryCmd() *cobra.Command {
 				return
 			}
 			client := client2.NewClient(user, password, endpoint, timeout)
+
 			resp, err := client.Query(context.Background(), query, vars)
 			if err != nil {
-				fmt.Println(stacktrace.Propagate(err, ""))
+				fmt.Println(err)
 				return
 			}
 			bits, err := json.MarshalIndent(resp, "", "    ")
 			if err != nil {
-				fmt.Println(stacktrace.Propagate(err, ""))
+				fmt.Println(err)
 				return
 			}
 			fmt.Println(string(bits))
