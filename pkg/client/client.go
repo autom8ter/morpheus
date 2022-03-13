@@ -31,9 +31,6 @@ func NewClient(username, password, endpoint string, timeout time.Duration) *Clie
 		Timeout:   timeout,
 	}
 	gclient := graphql.NewClient(endpoint, graphql.WithHTTPClient(client))
-	gclient.Log = func(s string) {
-		fmt.Println(s)
-	}
 	c := &Client{
 		next:       0,
 		httpClient: client,

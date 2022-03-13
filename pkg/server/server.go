@@ -11,11 +11,11 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/lru"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/autom8ter/morpheus/pkg/api"
-	"github.com/autom8ter/morpheus/pkg/auth"
 	"github.com/autom8ter/morpheus/pkg/config"
 	"github.com/autom8ter/morpheus/pkg/graph"
 	"github.com/autom8ter/morpheus/pkg/graph/generated"
 	"github.com/autom8ter/morpheus/pkg/logger"
+	"github.com/autom8ter/morpheus/pkg/middleware"
 	"github.com/autom8ter/morpheus/pkg/raft"
 	"github.com/palantir/stacktrace"
 	"github.com/soheilhy/cmux"
@@ -65,8 +65,8 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	ath := auth.NewAuth(cfg.Auth)
-	resolver := graph.NewResolver(g, rft, ath)
+	mw := middleware.NewMiddleware(cfg)
+	resolver := graph.NewResolver(g, rft, mw)
 	schema := generated.NewExecutableSchema(generated.Config{
 		Resolvers:  resolver,
 		Directives: generated.DirectiveRoot{},
@@ -98,9 +98,9 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 
 	mux.Handle("/", playground.Handler("GraphQL Console", "/query"))
 
-	mux.Handle("/query", ath.JwtClaimsParser(srv, false))
+	mux.Handle("/query", mw.Wrap(srv, false))
 
-	server := &http.Server{Handler: logger.Middleware(logger.L, mux)}
+	server := &http.Server{Handler: mux}
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
