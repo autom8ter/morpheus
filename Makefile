@@ -11,3 +11,6 @@ bench-storage:
 
 test-storage:
 	@go test -v ./pkg/storage
+
+query-size:
+	@go run main.go query -f examples/queries/size.graphql

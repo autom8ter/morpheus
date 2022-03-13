@@ -3,8 +3,8 @@ package storage
 import (
 	"bytes"
 	"encoding/gob"
-	"errors"
 	"fmt"
+	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/helpers"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/hashicorp/raft"
@@ -15,9 +15,6 @@ import (
 var (
 	dbLogsPrefix = []byte("logs")
 	dbConfPrefix = []byte("conf")
-
-	// ErrKeyNotFound is an error indicating a given key does not exist
-	ErrKeyNotFound = errors.New("not found")
 )
 
 type Storage struct {
@@ -199,7 +196,7 @@ func (b *Storage) Get(k []byte) ([]byte, error) {
 	key := []byte(fmt.Sprintf("%s%d", dbConfPrefix, k))
 	item, err := txn.Get(key)
 	if item == nil {
-		return nil, ErrKeyNotFound
+		return nil, constants.ErrNotFound
 	}
 	if err != nil {
 		return nil, err

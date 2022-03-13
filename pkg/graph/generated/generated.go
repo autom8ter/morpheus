@@ -71,6 +71,7 @@ type ComplexityRoot struct {
 		Del     func(childComplexity int, del model.Key) int
 		Get     func(childComplexity int, key model.Key) int
 		List    func(childComplexity int, filter model.Filter) int
+		Login   func(childComplexity int, username string, password string) int
 		Set     func(childComplexity int, set model.SetNode) int
 		Size    func(childComplexity int) int
 		Types   func(childComplexity int) int
@@ -114,6 +115,7 @@ type QueryResolver interface {
 	BulkAdd(ctx context.Context, add []*model.AddNode) (bool, error)
 	BulkSet(ctx context.Context, set []*model.SetNode) (bool, error)
 	BulkDel(ctx context.Context, del []*model.Key) (bool, error)
+	Login(ctx context.Context, username string, password string) (string, error)
 }
 type RelationshipResolver interface {
 	Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error)
@@ -339,6 +341,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.List(childComplexity, args["filter"].(model.Filter)), true
 
+	case "Query.login":
+		if e.complexity.Query.Login == nil {
+			break
+		}
+
+		args, err := ec.field_Query_login_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Login(childComplexity, args["username"].(string), args["password"].(string)), true
+
 	case "Query.set":
 		if e.complexity.Query.Set == nil {
 			break
@@ -500,16 +514,11 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 }
 
 var sources = []*ast.Source{
-	{Name: "schema.graphqls", Input: `scalar Map
+	{Name: "schema.graphqls", Input: `
+scalar Map
 
 scalar Any
 
-enum Role {
-  READER
-  WRITER
-  ADMIN
-  CLUSTER_PEER
-}
 
 input Key {
   type: String!
@@ -619,7 +628,10 @@ type Query {
   bulkAdd(add: [AddNode!]): Boolean!
   bulkSet(set: [SetNode!]): Boolean!
   bulkDel(del: [Key!]): Boolean!
+
+  login(username: String!, password: String!): String!
 }
+
 `, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
@@ -904,6 +916,30 @@ func (ec *executionContext) field_Query_list_args(ctx context.Context, rawArgs m
 		}
 	}
 	args["filter"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_login_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["username"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("username"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["username"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["password"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("password"))
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["password"] = arg1
 	return args, nil
 }
 
@@ -1869,6 +1905,48 @@ func (ec *executionContext) _Query_bulkDel(ctx context.Context, field graphql.Co
 	res := resTmp.(bool)
 	fc.Result = res
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_login(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_login_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Login(rctx, args["username"].(string), args["password"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -4217,6 +4295,29 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_bulkDel(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return rrm(innerCtx)
+			})
+		case "login":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_login(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}

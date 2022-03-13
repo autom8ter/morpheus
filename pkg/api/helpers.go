@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/datastructure"
 	"github.com/palantir/stacktrace"
 	"sort"
@@ -183,11 +184,11 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 	return newGraph(
 		func(nodeType string, nodeID string) (Node, error) {
 			if nodes[nodeType] == nil {
-				return nil, stacktrace.NewError("not found")
+				return nil, stacktrace.Propagate(constants.ErrNotFound, "")
 			}
 			val, ok := nodes[nodeType].Get(nodeID)
 			if !ok {
-				return nil, stacktrace.NewError("not found")
+				return nil, stacktrace.Propagate(constants.ErrNotFound, "")
 			}
 			return val.(Node), nil
 		},
@@ -351,11 +352,11 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 		},
 		func(typee string, id string) (Relationship, error) {
 			if relationships[typee] == nil {
-				return nil, stacktrace.NewError("not found")
+				return nil, stacktrace.Propagate(constants.ErrNotFound, "")
 			}
 			val, ok := relationships[typee].Get(id)
 			if !ok {
-				return nil, stacktrace.NewError("not found")
+				return nil, stacktrace.Propagate(constants.ErrNotFound, "")
 			}
 			return val.(Relationship), nil
 		},

@@ -17,42 +17,47 @@ import (
 	"github.com/autom8ter/morpheus/pkg/graph/generated"
 	"github.com/autom8ter/morpheus/pkg/logger"
 	"github.com/autom8ter/morpheus/pkg/raft"
+	"github.com/palantir/stacktrace"
+	"github.com/soheilhy/cmux"
 	"golang.org/x/sync/errgroup"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"time"
 )
 
 func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	if cfg.Server.GraphQLPort == 0 {
-		cfg.Server.GraphQLPort = 8080
+	if cfg.Server.Port == 0 {
+		cfg.Server.Port = 8080
 	}
 
-	rlis, err := net.Listen("tcp", fmt.Sprintf(":%v", cfg.Server.RaftPort))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%v", cfg.Server.Port))
 	if err != nil {
 		return err
 	}
-	defer rlis.Close()
-	glis, err := net.Listen("tcp", fmt.Sprintf(":%v", cfg.Server.GraphQLPort))
-	if err != nil {
-		return err
-	}
-	defer glis.Close()
+	defer lis.Close()
 	if cfg.Server.TLSCert != "" {
 		cer, err := tls.X509KeyPair([]byte(cfg.Server.TLSCert), []byte(cfg.Server.TLSKey))
 		if err != nil {
 			return err
 		}
 		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cer}}
-		rlis = tls.NewListener(rlis, tlsConfig)
-		glis = tls.NewListener(glis, tlsConfig)
+		lis = tls.NewListener(lis, tlsConfig)
 	}
+	clis := cmux.New(lis)
+
+	glis := clis.Match(cmux.HTTP1(), cmux.HTTP2())
+	defer glis.Close()
+	tcplis := clis.Match(cmux.Any())
+	defer tcplis.Close()
+
 	joinRaft := cfg.Server.RaftCluster
 	rft, err := raft.NewRaft(
 		g,
-		rlis,
+		tcplis,
 		raft.WithRaftDir(fmt.Sprintf("%s/raft", cfg.Database.StoragePath)),
 		raft.WithIsLeader(joinRaft == ""),
 		raft.WithClusterSecret(cfg.Server.RaftSecret),
@@ -60,14 +65,8 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	resolver := graph.NewResolver(g, rft)
-	defer func() {
-		if err := resolver.Close(); err != nil {
-			logger.L.Error("failed to close graphql resolver", map[string]interface{}{
-				"error": err,
-			})
-		}
-	}()
+	ath := auth.NewAuth(cfg.Auth)
+	resolver := graph.NewResolver(g, rft, ath)
 	schema := generated.NewExecutableSchema(generated.Config{
 		Resolvers:  resolver,
 		Directives: generated.DirectiveRoot{},
@@ -97,28 +96,46 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 		}
 	}
 
-	mux.Handle("/", playground.Handler("GraphQL playground", "/query"))
+	mux.Handle("/", playground.Handler("GraphQL Console", "/query"))
 
-	if cfg.Auth != nil && len(cfg.Auth.Users) > 0 {
-		mux.Handle("/query", auth.Middleware(auth.BasicAuth(cfg.Auth.Users), srv))
-	} else {
-		mux.Handle("/query", srv)
-	}
+	mux.Handle("/query", ath.JwtClaimsParser(srv, false))
 
 	server := &http.Server{Handler: logger.Middleware(logger.L, mux)}
-	wg := errgroup.Group{}
+
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+
+	wg, ctx := errgroup.WithContext(ctx)
 	wg.Go(func() error {
-		for {
-			select {
-			case <-ctx.Done():
-				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-				defer cancel()
-				return server.Shutdown(ctx)
-			}
+		clis.Serve()
+		return nil
+	})
+	wg.Go(func() error {
+		if err := server.Serve(glis); err != nil && stacktrace.RootCause(err) != http.ErrServerClosed {
+			return stacktrace.Propagate(server.Serve(glis), "")
 		}
+		return nil
 	})
-	wg.Go(func() error {
-		return server.Serve(glis)
-	})
+	select {
+	case <-interrupt:
+		logger.L.Info("shutdown signal received", map[string]interface{}{})
+		cancel()
+		break
+	case <-ctx.Done():
+		break
+	}
+	logger.L.Info("shutting down...", map[string]interface{}{})
+	ctx, cancel = context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		logger.L.Error("failed to shutdown server", map[string]interface{}{
+			"error": err,
+		})
+	}
+	g.Close()
+	rft.Close()
+	tcplis.Close()
+	clis.Close()
+	lis.Close()
 	return wg.Wait()
 }

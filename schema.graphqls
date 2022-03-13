@@ -1,13 +1,8 @@
+
 scalar Map
 
 scalar Any
 
-enum Role {
-  READER
-  WRITER
-  ADMIN
-  CLUSTER_PEER
-}
 
 input Key {
   type: String!
@@ -117,4 +112,7 @@ type Query {
   bulkAdd(add: [AddNode!]): Boolean!
   bulkSet(set: [SetNode!]): Boolean!
   bulkDel(del: [Key!]): Boolean!
+
+  login(username: String!, password: String!): String!
 }
+

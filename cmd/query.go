@@ -37,7 +37,6 @@ func getQueryCmd() *cobra.Command {
 				fmt.Println("empty query")
 				return
 			}
-			// fmt.Println(query)
 			client := client2.NewClient(user, password, endpoint, timeout)
 			resp, err := client.Query(context.Background(), query, vars)
 			if err != nil {

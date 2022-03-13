@@ -9,25 +9,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const defaultCacheSize = 100000
+
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "start server",
 	Run: func(_ *cobra.Command, _ []string) {
-		g, err := persistance.NewPersistantGraph(fmt.Sprintf("%s/storage", cfg.Database.StoragePath), 100000)
+		g, err := persistance.NewPersistantGraph(fmt.Sprintf("%s/storage", cfg.Database.StoragePath), defaultCacheSize)
 		if err != nil {
 			panic(err)
 		}
-		defer func() {
-			if err := g.Close(); err != nil {
-				logger.L.Error("failed to close graph", map[string]interface{}{
-					"error": err,
-				})
-			}
-		}()
 		logger.L.Info("starting server", map[string]interface{}{
-			"graphql_port": cfg.Server.GraphQLPort,
-			"raft_port":    cfg.Server.RaftPort,
+			"port": cfg.Server.Port,
 		})
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

@@ -8,10 +8,11 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"github.com/autom8ter/morpheus/pkg/config"
 	"sort"
 
 	"github.com/autom8ter/morpheus/pkg/api"
-	"github.com/autom8ter/morpheus/pkg/auth"
+	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/autom8ter/morpheus/pkg/graph/generated"
 	"github.com/autom8ter/morpheus/pkg/graph/model"
@@ -22,6 +23,10 @@ import (
 )
 
 func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[string]interface{}, error) {
+	_, err := r.auth.RequireRole(ctx, config.READER)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
@@ -32,6 +37,10 @@ func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[str
 }
 
 func (r *nodeResolver) GetProperty(ctx context.Context, obj *model.Node, key string) (interface{}, error) {
+	_, err := r.auth.RequireRole(ctx, config.READER)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
@@ -42,8 +51,9 @@ func (r *nodeResolver) GetProperty(ctx context.Context, obj *model.Node, key str
 }
 
 func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, properties map[string]interface{}) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
+	_, err := r.auth.RequireRole(ctx, config.WRITER)
+	if err != nil {
+		return false, stacktrace.Propagate(err, "")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -72,6 +82,10 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 }
 
 func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, id string) (*model.Relationship, error) {
+	_, err := r.auth.RequireRole(ctx, config.READER)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
@@ -80,14 +94,15 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, dir
 	}
 	rel, ok := n.GetRelationship(api.Direction(direction), relationship, id)
 	if !ok {
-		return nil, fmt.Errorf("not found")
+		return nil, stacktrace.Propagate(constants.ErrNotFound, "")
 	}
 	return toRelationship(rel), nil
 }
 
 func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, nodeKey model.Key) (*model.Relationship, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return nil, stacktrace.NewError("authorization failed: readonly user")
+	_, err := r.auth.RequireRole(ctx, config.WRITER)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -122,8 +137,9 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, dir
 }
 
 func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, direction model.Direction, key model.Key) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
+	_, err := r.auth.RequireRole(ctx, config.WRITER)
+	if err != nil {
+		return false, stacktrace.Propagate(err, "")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -154,6 +170,10 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, dir
 }
 
 func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direction model.Direction, filter *model.Filter) (*model.Relationships, error) {
+	_, err := r.auth.RequireRole(ctx, config.READER)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
@@ -226,12 +246,20 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 }
 
 func (r *queryResolver) Types(ctx context.Context) ([]string, error) {
+	_, err := r.auth.RequireRole(ctx, config.READER)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.graph.NodeTypes(), nil
 }
 
 func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, error) {
+	_, err := r.auth.RequireRole(ctx, config.READER)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(key.Type, key.ID)
@@ -242,6 +270,10 @@ func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, er
 }
 
 func (r *queryResolver) List(ctx context.Context, filter model.Filter) (*model.Nodes, error) {
+	_, err := r.auth.RequireRole(ctx, config.READER)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var nodes []*model.Node
@@ -311,14 +343,19 @@ func (r *queryResolver) List(ctx context.Context, filter model.Filter) (*model.N
 }
 
 func (r *queryResolver) Size(ctx context.Context) (int, error) {
+	_, err := r.auth.RequireRole(ctx, config.READER)
+	if err != nil {
+		return 0, stacktrace.Propagate(err, "")
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.graph.Size(), nil
 }
 
 func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return nil, fmt.Errorf("authorization failed: readonly user")
+	_, err := r.auth.RequireRole(ctx, config.WRITER)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
 	}
 	if add.ID == nil {
 		id := uuid.New().String()
@@ -352,8 +389,9 @@ func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node
 }
 
 func (r *queryResolver) Set(ctx context.Context, set model.SetNode) (*model.Node, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return nil, fmt.Errorf("authorization failed: readonly user")
+	_, err := r.auth.RequireRole(ctx, config.WRITER)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -382,8 +420,9 @@ func (r *queryResolver) Set(ctx context.Context, set model.SetNode) (*model.Node
 }
 
 func (r *queryResolver) Del(ctx context.Context, del model.Key) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
+	_, err := r.auth.RequireRole(ctx, config.WRITER)
+	if err != nil {
+		return false, stacktrace.Propagate(err, "")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -411,8 +450,9 @@ func (r *queryResolver) Del(ctx context.Context, del model.Key) (bool, error) {
 }
 
 func (r *queryResolver) BulkAdd(ctx context.Context, add []*model.AddNode) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
+	_, err := r.auth.RequireRole(ctx, config.WRITER)
+	if err != nil {
+		return false, stacktrace.Propagate(err, "")
 	}
 	var toAdd []fsm.AddNode
 	for _, a := range add {
@@ -447,8 +487,9 @@ func (r *queryResolver) BulkAdd(ctx context.Context, add []*model.AddNode) (bool
 }
 
 func (r *queryResolver) BulkSet(ctx context.Context, set []*model.SetNode) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
+	_, err := r.auth.RequireRole(ctx, config.WRITER)
+	if err != nil {
+		return false, stacktrace.Propagate(err, "")
 	}
 	var setProperties []fsm.SetNodeProperty
 	for _, s := range set {
@@ -479,8 +520,9 @@ func (r *queryResolver) BulkSet(ctx context.Context, set []*model.SetNode) (bool
 }
 
 func (r *queryResolver) BulkDel(ctx context.Context, del []*model.Key) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
+	_, err := r.auth.RequireRole(ctx, config.WRITER)
+	if err != nil {
+		return false, stacktrace.Propagate(err, "")
 	}
 	var delNodes []fsm.DelNode
 	for _, d := range del {
@@ -509,7 +551,19 @@ func (r *queryResolver) BulkDel(ctx context.Context, del []*model.Key) (bool, er
 	return true, nil
 }
 
+func (r *queryResolver) Login(ctx context.Context, username string, password string) (string, error) {
+	token, err := r.auth.Login(username, password)
+	if err != nil {
+		return "", stacktrace.Propagate(err, "")
+	}
+	return token, nil
+}
+
 func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error) {
+	_, err := r.auth.RequireRole(ctx, config.READER)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetRelationship(obj.Type, obj.ID)
@@ -520,6 +574,10 @@ func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relati
 }
 
 func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relationship, key string) (interface{}, error) {
+	_, err := r.auth.RequireRole(ctx, config.READER)
+	if err != nil {
+		return false, stacktrace.Propagate(err, "")
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetRelationship(obj.Type, obj.ID)
@@ -530,8 +588,9 @@ func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relat
 }
 
 func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Relationship, properties map[string]interface{}) (bool, error) {
-	if usr, ok := auth.GetUser(ctx); ok && usr.ReadOnly {
-		return false, fmt.Errorf("authorization failed: readonly user")
+	_, err := r.auth.RequireRole(ctx, config.WRITER)
+	if err != nil {
+		return false, stacktrace.Propagate(err, "")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()

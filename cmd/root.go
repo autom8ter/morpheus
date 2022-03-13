@@ -29,4 +29,10 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if cfg.Auth == nil {
+		cfg.Auth = &config.Auth{}
+	}
+	if cfg.Features == nil {
+		cfg.Features = &config.Features{}
+	}
 }

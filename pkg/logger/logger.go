@@ -69,6 +69,22 @@ func (l *Logger) Error(msg string, fields map[string]interface{}) {
 	l.logger.Error(msg, toFields(fields)...)
 }
 
+func (l *Logger) HTTPError(w http.ResponseWriter, message string, err error, status int) {
+	fields := map[string]interface{}{
+		"http_response_status": status,
+	}
+	if err != nil {
+		fields["err"] = err
+	}
+	switch status {
+	case 401, 403, 404:
+		l.Info(message, fields)
+	default:
+		l.Error(message, fields)
+	}
+	http.Error(w, message, status)
+}
+
 func (l *Logger) Zap() *zap.Logger {
 	return l.logger
 }

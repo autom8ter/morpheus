@@ -5,6 +5,7 @@ import (
 	"github.com/autom8ter/morpheus/pkg/logger"
 	"github.com/spf13/viper"
 	"os"
+	"time"
 )
 
 type Config struct {
@@ -39,8 +40,7 @@ func LoadConfig(configFile string) (*Config, error) {
 }
 
 type Server struct {
-	GraphQLPort   int    `mapstructure:"graphql_port"`
-	RaftPort      int    `mapstructure:"raft_port"`
+	Port          int    `mapstructure:"port"`
 	RaftCluster   string `mapstructure:"raft_cluster"`
 	RaftSecret    string `mapstructure:"raft_secret"`
 	RaftBroadcast string `mapstructure:"raft_broadcast"`
@@ -48,23 +48,37 @@ type Server struct {
 	TLSCert       string `mapstructure:"tls_cert"`
 }
 
-type Auth struct {
-	Users []*User `mapstructure:"users"`
-}
-
-type User struct {
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
-	ReadOnly bool   `mapstructure:"read_only"`
-}
-
 type Database struct {
 	StoragePath string `mapstructure:"storage_path"`
 }
 
 type Features struct {
-	LogQueries    bool `mapstructure:"log_queries"`
-	ApolloTracing bool `mapstructure:"apollo_tracing"`
-	Introspection bool `mapstructure:"introspection"`
-	Playground    bool `mapstructure:"playground"`
+	GraphqlConsole string `mapstructure:"graphqlConsole"`
+	LogQueries     bool   `mapstructure:"log_queries"`
+	ApolloTracing  bool   `mapstructure:"apollo_tracing"`
+	Introspection  bool   `mapstructure:"introspection"`
+	Playground     bool   `mapstructure:"playground"`
+}
+
+type Auth struct {
+	Disabled      bool          `mapstructure:"disabled"`
+	SigningSecret string        `mapstructure:"signing_secret"`
+	TokenTTL      time.Duration `mapstructure:"token_ttl"`
+	Users         []User        `mapstructure:"users"`
+}
+
+type Role string
+
+const (
+	READER Role = "reader"
+	WRITER Role = "writer"
+	ADMIN  Role = "admin"
+)
+
+var Roles = []Role{READER, WRITER, ADMIN}
+
+type User struct {
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+	Roles    []Role `mapstructure:"roles"`
 }
