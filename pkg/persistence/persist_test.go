@@ -15,7 +15,7 @@ func Test(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	g, err := New(dir, 100)
+	g, err := New(dir)
 	if err != nil {
 		t.Fatal(err)
 	}

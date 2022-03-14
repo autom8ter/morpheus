@@ -18,7 +18,7 @@ type DB struct {
 	relationshipTypes sync.Map
 }
 
-func New(dir string, rcacheSize int) (*DB, error) {
+func New(dir string) (*DB, error) {
 	db, err := badger.Open(badger.DefaultOptions(dir).WithLogger(bLogger{}))
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to create database storage")
