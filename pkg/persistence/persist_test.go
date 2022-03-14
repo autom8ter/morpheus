@@ -31,18 +31,23 @@ func Test(t *testing.T) {
 	}
 	coleman.AddRelationship("works_at", choozle)
 
+	found := false
 	coleman.Relationships(0, "works_at", "business", func(relationship api.Relationship) bool {
+		found = true
 		t.Logf("relationships - %s %s %s", coleman.GetProperty("name"), relationship.Type(), relationship.Target().ID())
 		return true
 	})
+	if !found {
+		t.Fatal("failed to find relationship")
+	}
 
 	{
 		c, err := g.GetNode("user", "colemanword@gmail.com")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(coleman, c) {
-			t.Fatal("not equal")
+		if !reflect.DeepEqual(coleman.Properties(), c.Properties()) {
+			t.Fatal("not equal", jsonString(coleman.Properties()), jsonString(c.Properties()))
 		}
 	}
 	t.Log(g.NodeTypes())

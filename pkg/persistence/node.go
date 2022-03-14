@@ -1,10 +1,10 @@
 package persistence
 
 import (
+	"fmt"
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/dgraph-io/badger/v3"
-	"github.com/google/uuid"
 	"github.com/palantir/stacktrace"
 	"strings"
 )
@@ -13,7 +13,7 @@ type Node struct {
 	nodeType string
 	nodeID   string
 	item     []byte
-	db       *badger.DB
+	db       *DB
 }
 
 func (n Node) Type() string {
@@ -33,7 +33,7 @@ func (n Node) Properties() map[string]interface{} {
 		n.item = nil
 		return data
 	}
-	if err := n.db.View(func(txn *badger.Txn) error {
+	if err := n.db.db.View(func(txn *badger.Txn) error {
 		var key = getNodePath(n.nodeType, n.nodeID)
 		item, err := txn.Get(key)
 		if err != nil {
@@ -66,7 +66,7 @@ func (n Node) SetProperties(properties map[string]interface{}) {
 		panic(stacktrace.Propagate(err, ""))
 	}
 	var key = getNodePath(n.nodeType, n.nodeID)
-	if err := n.db.Update(func(txn *badger.Txn) error {
+	if err := n.db.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, bits)
 	}); err != nil {
 		panic(stacktrace.Propagate(err, ""))
@@ -80,20 +80,19 @@ func (n Node) DelProperty(name string) {
 }
 
 func (n Node) AddRelationship(relationship string, node api.Node) api.Relationship {
+	relID := getRelationID(n.Type(), n.ID(), relationship, node.Type(), node.ID())
+	n.db.relationshipTypes.Store(relationship, struct{}{})
+	rkey := getRelationshipPath(relationship, relID)
+	source := getNodeRelationshipPath(n.Type(), n.ID(), api.Outgoing, relationship, node.Type(), node.ID(), relID)
+	target := getNodeRelationshipPath(node.Type(), node.ID(), api.Incoming, relationship, n.Type(), n.ID(), relID)
 
-	rkey := getRelationshipPath(relationship, uuid.NewString())
-	source := getNodeRelationshipPath(n.Type(), n.ID(), api.Outgoing, relationship, node.Type(), node.ID())
-	target := getNodeRelationshipPath(node.Type(), node.ID(), api.Incoming, relationship, node.Type(), node.ID())
-
-	values := map[string]interface{}{
-		Direction: api.Outgoing,
-	}
+	values := map[string]interface{}{}
 	values[Direction] = api.Outgoing
 	values[SourceType] = n.Type()
 	values[SourceID] = n.ID()
 	values[TargetID] = node.ID()
 	values[TargetType] = node.Type()
-	values[ID] = getRelationID(n.Type(), n.ID(), relationship, node.Type(), node.ID())
+	values[ID] = relID
 	values[Relation] = relationship
 	values[Type] = relationship
 
@@ -101,7 +100,7 @@ func (n Node) AddRelationship(relationship string, node api.Node) api.Relationsh
 	if err != nil {
 		panic(err)
 	}
-	if err := n.db.Update(func(txn *badger.Txn) error {
+	if err := n.db.db.Update(func(txn *badger.Txn) error {
 		if err := txn.Set(rkey, bits); err != nil {
 			return stacktrace.Propagate(err, "")
 		}
@@ -115,6 +114,9 @@ func (n Node) AddRelationship(relationship string, node api.Node) api.Relationsh
 	}); err != nil {
 		panic(err)
 	}
+	fmt.Println(string(rkey))
+	fmt.Println(string(source))
+	fmt.Println(string(target))
 	return nil
 }
 
@@ -124,10 +126,10 @@ func (n Node) DelRelationship(relationship string, id string) {
 		return
 	}
 	rkey := getRelationshipPath(rel.Type(), rel.ID())
-	source := getNodeRelationshipPath(n.Type(), n.ID(), api.Outgoing, relationship, rel.Target().Type(), rel.Target().ID())
-	target := getNodeRelationshipPath(rel.Target().Type(), rel.Target().ID(), api.Incoming, relationship, n.Type(), n.ID())
+	source := getNodeRelationshipPath(n.Type(), n.ID(), api.Outgoing, relationship, rel.Target().Type(), rel.Target().ID(), rel.ID())
+	target := getNodeRelationshipPath(rel.Target().Type(), rel.Target().ID(), api.Incoming, relationship, n.Type(), n.ID(), rel.ID())
 
-	if err := n.db.Update(func(txn *badger.Txn) error {
+	if err := n.db.db.Update(func(txn *badger.Txn) error {
 		if err := txn.Delete(rkey); err != nil {
 			return stacktrace.Propagate(err, "")
 		}
@@ -151,7 +153,7 @@ func (n Node) GetRelationship(relation, id string) (api.Relationship, bool) {
 		item:             nil,
 		db:               n.db,
 	}
-	if err := n.db.View(func(txn *badger.Txn) error {
+	if err := n.db.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(rkey)
 		if err != nil {
 			return stacktrace.Propagate(err, "")
@@ -174,14 +176,15 @@ func (n Node) GetRelationship(relation, id string) (api.Relationship, bool) {
 
 func (n Node) Relationships(skip int, relation string, targetType string, fn func(relationship api.Relationship) bool) {
 	source := getNodeRelationshipPrefix(n.Type(), n.ID(), api.Outgoing, relation, targetType)
+	fmt.Println(string(source))
 	// Iterate over 1000 items
 	var skipped int
-	if err := n.db.View(func(txn *badger.Txn) error {
+	if err := n.db.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchSize = 10
 		it := txn.NewIterator(opt)
 		defer it.Close()
-		for it.Rewind(); it.ValidForPrefix(source); it.Next() {
+		for it.Seek(source); it.ValidForPrefix(source); it.Next() {
 			if skipped < skip {
 				skip++
 				continue
@@ -191,6 +194,7 @@ func (n Node) Relationships(skip int, relation string, targetType string, fn fun
 			rel := &Relationship{
 				relationshipType: relation,
 				relationshipID:   split[len(split)-1],
+				item:             nil,
 				db:               n.db,
 			}
 			if err := item.Value(func(val []byte) error {

@@ -5,19 +5,17 @@ import (
 	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/dgraph-io/badger/v3"
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/palantir/stacktrace"
 	"sort"
 	"strings"
+	"sync"
 )
 
 type DB struct {
 	dir               string
-	rcacheSize        int
-	rcache            *lru.Cache
 	db                *badger.DB
-	nodeTypes         map[string]struct{}
-	relationshipTypes map[string]struct{}
+	nodeTypes         sync.Map
+	relationshipTypes sync.Map
 }
 
 func New(dir string, rcacheSize int) (*DB, error) {
@@ -25,26 +23,19 @@ func New(dir string, rcacheSize int) (*DB, error) {
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to create database storage")
 	}
-
-	rcache, err := lru.New(rcacheSize)
-	if err != nil {
-		return nil, stacktrace.Propagate(err, "failed to create cache")
-	}
 	return &DB{
 		dir:               dir,
-		rcacheSize:        rcacheSize,
-		rcache:            rcache,
 		db:                db,
-		nodeTypes:         map[string]struct{}{},
-		relationshipTypes: map[string]struct{}{},
+		nodeTypes:         sync.Map{},
+		relationshipTypes: sync.Map{},
 	}, nil
 }
 
-func (d DB) GetNode(nodeType, nodeID string) (api.Node, error) {
+func (d *DB) GetNode(nodeType, nodeID string) (api.Node, error) {
 	n := &Node{
 		nodeType: nodeType,
 		nodeID:   nodeID,
-		db:       d.db,
+		db:       d,
 	}
 	key := getNodePath(nodeType, nodeID)
 	if err := d.db.View(func(txn *badger.Txn) error {
@@ -69,7 +60,8 @@ func (d DB) GetNode(nodeType, nodeID string) (api.Node, error) {
 	return n, nil
 }
 
-func (d DB) AddNode(nodeType, nodeID string, properties map[string]interface{}) (api.Node, error) {
+func (d *DB) AddNode(nodeType, nodeID string, properties map[string]interface{}) (api.Node, error) {
+	d.nodeTypes.Store(nodeType, struct{}{})
 	key := getNodePath(nodeType, nodeID)
 	bits, err := encode.Marshal(properties)
 	if err != nil {
@@ -83,11 +75,11 @@ func (d DB) AddNode(nodeType, nodeID string, properties map[string]interface{}) 
 	return &Node{
 		nodeType: nodeType,
 		nodeID:   nodeID,
-		db:       d.db,
+		db:       d,
 	}, nil
 }
 
-func (d DB) DelNode(nodeType, nodeID string) error {
+func (d *DB) DelNode(nodeType, nodeID string) error {
 	key := getNodePath(nodeType, nodeID)
 	if err := d.db.Update(func(txn *badger.Txn) error {
 		return txn.Delete(key)
@@ -97,7 +89,7 @@ func (d DB) DelNode(nodeType, nodeID string) error {
 	return nil
 }
 
-func (d DB) RangeNodes(skip int, nodeType string, fn func(node api.Node) bool) error {
+func (d *DB) RangeNodes(skip int, nodeType string, fn func(node api.Node) bool) error {
 	var skipped int
 	key := getNodePath(nodeType, "")
 	if err := d.db.View(func(txn *badger.Txn) error {
@@ -116,7 +108,7 @@ func (d DB) RangeNodes(skip int, nodeType string, fn func(node api.Node) bool) e
 			if !fn(&Node{
 				nodeType: nodeType,
 				nodeID:   split[len(split)-1],
-				db:       d.db,
+				db:       d,
 			}) {
 				break
 			}
@@ -128,21 +120,22 @@ func (d DB) RangeNodes(skip int, nodeType string, fn func(node api.Node) bool) e
 	return nil
 }
 
-func (d DB) NodeTypes() []string {
+func (d *DB) NodeTypes() []string {
 	var types []string
-	for t, _ := range d.nodeTypes {
-		types = append(types, t)
-	}
+	d.nodeTypes.Range(func(key, value interface{}) bool {
+		types = append(types, key.(string))
+		return true
+	})
 	sort.Strings(types)
 	return types
 }
 
-func (d DB) GetRelationship(relation string, id string) (api.Relationship, error) {
+func (d *DB) GetRelationship(relation string, id string) (api.Relationship, error) {
 	r := &Relationship{
 		relationshipType: relation,
 		relationshipID:   id,
 		item:             nil,
-		db:               d.db,
+		db:               d,
 	}
 	key := getRelationshipPath(relation, id)
 	if err := d.db.View(func(txn *badger.Txn) error {
@@ -167,7 +160,7 @@ func (d DB) GetRelationship(relation string, id string) (api.Relationship, error
 	return r, nil
 }
 
-func (d DB) RangeRelationships(skip int, relation string, fn func(node api.Relationship) bool) error {
+func (d *DB) RangeRelationships(skip int, relation string, fn func(node api.Relationship) bool) error {
 	source := getRelationshipPath(relation, "")
 	// Iterate over 1000 items
 	var skipped int
@@ -186,7 +179,7 @@ func (d DB) RangeRelationships(skip int, relation string, fn func(node api.Relat
 			if !fn(&Relationship{
 				relationshipType: relation,
 				relationshipID:   split[len(split)-1],
-				db:               d.db,
+				db:               d,
 			}) {
 				break
 			}
@@ -198,19 +191,29 @@ func (d DB) RangeRelationships(skip int, relation string, fn func(node api.Relat
 	return nil
 }
 
-func (d DB) RelationshipTypes() []string {
+func (d *DB) RelationshipTypes() []string {
 	var types []string
-	for t, _ := range d.relationshipTypes {
-		types = append(types, t)
-	}
+	d.relationshipTypes.Range(func(key, value interface{}) bool {
+		types = append(types, key.(string))
+		return true
+	})
 	sort.Strings(types)
 	return types
 }
 
-func (d DB) Size() int {
-	panic("implement me")
+func (d *DB) Size() int {
+	count := 0
+	for _, t := range d.NodeTypes() {
+		if err := d.RangeNodes(0, t, func(node api.Node) bool {
+			count++
+			return true
+		}); err != nil {
+			panic(stacktrace.Propagate(err, ""))
+		}
+	}
+	return count
 }
 
-func (d DB) Close() error {
+func (d *DB) Close() error {
 	return d.db.Close()
 }

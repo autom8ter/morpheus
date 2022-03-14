@@ -31,14 +31,13 @@ func getNodePath(typee, id string) []byte {
 	return []byte(strings.Join(key, ","))
 }
 
-func getNodeRelationshipPath(sourceType, sourceID string, direction api.Direction, relation, targetType, targetID string) []byte {
-	key := append([]string{nodeRelationPrefix}, sourceType, sourceID, string(direction), relation, relationshipPrefix, targetType, targetID,
-		getRelationID(sourceType, sourceID, relation, targetType, targetID))
+func getNodeRelationshipPath(sourceType, sourceID string, direction api.Direction, relation, targetType, targetID, relationID string) []byte {
+	key := append([]string{nodeRelationPrefix}, sourceType, sourceID, string(direction), relation, targetType, targetID, relationID)
 	return []byte(strings.Join(key, ","))
 }
 
 func getRelationID(sourceType, sourceID string, relation, targetType, targetID string) string {
-	key := append([]string{nodeRelationPrefix}, sourceType, sourceID, relation, relationshipPrefix, targetType, targetID)
+	key := append([]string{nodeRelationPrefix}, sourceType, sourceID, relation, targetType, targetID)
 	s := sha1.New()
 	s.Write([]byte(strings.Join(key, ",")))
 	id := s.Sum(nil)
@@ -46,7 +45,7 @@ func getRelationID(sourceType, sourceID string, relation, targetType, targetID s
 }
 
 func getNodeRelationshipPrefix(sourceType, sourceID string, direction api.Direction, relation, targetType string) []byte {
-	key := append([]string{nodeRelationPrefix}, sourceType, sourceID, string(direction), relationshipPrefix, targetType)
+	key := append([]string{nodeRelationPrefix}, sourceType, sourceID, string(direction), relation, targetType)
 	return []byte(strings.Join(key, ","))
 }
 

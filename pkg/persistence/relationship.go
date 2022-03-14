@@ -12,7 +12,7 @@ type Relationship struct {
 	relationshipType string
 	relationshipID   string
 	item             []byte
-	db               *badger.DB
+	db               *DB
 }
 
 func (n Relationship) Type() string {
@@ -32,7 +32,7 @@ func (n Relationship) Properties() map[string]interface{} {
 		n.item = nil
 		return data
 	}
-	if err := n.db.View(func(txn *badger.Txn) error {
+	if err := n.db.db.View(func(txn *badger.Txn) error {
 		var key = getRelationshipPath(n.relationshipType, n.relationshipID)
 		item, err := txn.Get(key)
 		if err != nil {
@@ -65,7 +65,7 @@ func (n Relationship) SetProperties(properties map[string]interface{}) {
 		panic(stacktrace.Propagate(err, ""))
 	}
 	var key = getRelationshipPath(n.relationshipType, n.relationshipID)
-	if err := n.db.Update(func(txn *badger.Txn) error {
+	if err := n.db.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, bits)
 	}); err != nil {
 		panic(stacktrace.Propagate(err, ""))
