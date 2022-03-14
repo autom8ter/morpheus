@@ -114,10 +114,12 @@ func (n Node) AddRelationship(relationship string, node api.Node) api.Relationsh
 	}); err != nil {
 		panic(err)
 	}
-	fmt.Println(string(rkey))
-	fmt.Println(string(source))
-	fmt.Println(string(target))
-	return nil
+	return &Relationship{
+		relationshipType: relationship,
+		relationshipID:   relID,
+		item:             bits,
+		db:               n.db,
+	}
 }
 
 func (n Node) DelRelationship(relationship string, id string) {

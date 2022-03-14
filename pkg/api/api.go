@@ -25,8 +25,6 @@ type Entity interface {
 	DelProperty(name string)
 }
 
-type EntityCreationFunc func(prefix, nodeType, nodeID string, properties map[string]interface{}) Entity
-
 type Node interface {
 	Entity
 	AddRelationship(relationship string, node Node) Relationship
@@ -55,5 +53,3 @@ type Graph interface {
 	Size() int
 	Close() error
 }
-
-type Operation func(graph Graph, input map[string]string, output chan interface{}) error

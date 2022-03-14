@@ -12,10 +12,10 @@ import (
 )
 
 const addRelation = `
-query ($key: Key!, $direction: Direction!, $relationship: String!, $nodeKey: Key!) {
+query ($key: Key!, $relationship: String!, $nodeKey: Key!) {
   get(key: $key){
     id
-    addRelationship(direction: $direction, relationship: $relationship, nodeKey: $nodeKey) {
+    addRelationship(relationship: $relationship, nodeKey: $nodeKey) {
       type
     }
   }
@@ -223,7 +223,6 @@ query ($role: String) {
 				Type: "movie",
 				ID:   cast.ToString(role["movie_id"]),
 			},
-			"direction":    model.DirectionOutgoing,
 			"relationship": "has_role",
 			"nodeKey": &model.Key{
 				Type: "role",

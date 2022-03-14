@@ -15,15 +15,15 @@ type Relationship struct {
 	db               *DB
 }
 
-func (n Relationship) Type() string {
+func (n *Relationship) Type() string {
 	return n.relationshipType
 }
 
-func (n Relationship) ID() string {
+func (n *Relationship) ID() string {
 	return n.relationshipID
 }
 
-func (n Relationship) Properties() map[string]interface{} {
+func (n *Relationship) Properties() map[string]interface{} {
 	data := map[string]interface{}{}
 	if n.item != nil {
 		if err := encode.Unmarshal(n.item, &data); err != nil {
@@ -51,7 +51,7 @@ func (n Relationship) Properties() map[string]interface{} {
 	return data
 }
 
-func (n Relationship) GetProperty(name string) interface{} {
+func (n *Relationship) GetProperty(name string) interface{} {
 	all := n.Properties()
 	if all == nil {
 		return nil
@@ -59,7 +59,7 @@ func (n Relationship) GetProperty(name string) interface{} {
 	return all[name]
 }
 
-func (n Relationship) SetProperties(properties map[string]interface{}) {
+func (n *Relationship) SetProperties(properties map[string]interface{}) {
 	bits, err := encode.Marshal(properties)
 	if err != nil {
 		panic(stacktrace.Propagate(err, ""))
@@ -72,7 +72,7 @@ func (n Relationship) SetProperties(properties map[string]interface{}) {
 	}
 }
 
-func (n Relationship) DelProperty(name string) {
+func (n *Relationship) DelProperty(name string) {
 	all := n.Properties()
 	delete(all, name)
 	n.SetProperties(all)

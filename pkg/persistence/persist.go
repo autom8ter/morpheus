@@ -61,8 +61,13 @@ func (d *DB) GetNode(nodeType, nodeID string) (api.Node, error) {
 }
 
 func (d *DB) AddNode(nodeType, nodeID string, properties map[string]interface{}) (api.Node, error) {
+	if properties == nil {
+		properties = map[string]interface{}{}
+	}
 	d.nodeTypes.Store(nodeType, struct{}{})
 	key := getNodePath(nodeType, nodeID)
+	properties[ID] = nodeID
+	properties[Type] = nodeType
 	bits, err := encode.Marshal(properties)
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
@@ -70,7 +75,7 @@ func (d *DB) AddNode(nodeType, nodeID string, properties map[string]interface{})
 	if err := d.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, bits)
 	}); err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "")
 	}
 	return &Node{
 		nodeType: nodeType,
@@ -163,7 +168,6 @@ func (d *DB) GetRelationship(relation string, id string) (api.Relationship, erro
 
 func (d *DB) RangeRelationships(skip int, relation string, fn func(node api.Relationship) bool) error {
 	source := getRelationshipPath(relation, "")
-	// Iterate over 1000 items
 	var skipped int
 	if err := d.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions

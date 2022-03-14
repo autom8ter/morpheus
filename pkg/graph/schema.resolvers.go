@@ -110,11 +110,11 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, rel
 		Method: fsm.AddRelationships,
 		AddRelationships: []fsm.AddRelationship{
 			{
-				NodeType:       obj.Type,
-				NodeID:         obj.ID,
-				Relationship:   relationship,
-				Node2Type:      nodeKey.Type,
-				Node2ID:        nodeKey.ID,
+				NodeType:     obj.Type,
+				NodeID:       obj.ID,
+				Relationship: relationship,
+				Node2Type:    nodeKey.Type,
+				Node2ID:      nodeKey.ID,
 			},
 		},
 	}
