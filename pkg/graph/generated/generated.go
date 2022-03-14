@@ -60,7 +60,7 @@ type ComplexityRoot struct {
 
 	Nodes struct {
 		Cursor func(childComplexity int) int
-		Nodes  func(childComplexity int) int
+		Values func(childComplexity int) int
 	}
 
 	Query struct {
@@ -89,8 +89,8 @@ type ComplexityRoot struct {
 	}
 
 	Relationships struct {
-		Cursor        func(childComplexity int) int
-		Relationships func(childComplexity int) int
+		Cursor func(childComplexity int) int
+		Values func(childComplexity int) int
 	}
 }
 
@@ -250,12 +250,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Nodes.Cursor(childComplexity), true
 
-	case "Nodes.nodes":
-		if e.complexity.Nodes.Nodes == nil {
+	case "Nodes.values":
+		if e.complexity.Nodes.Values == nil {
 			break
 		}
 
-		return e.complexity.Nodes.Nodes(childComplexity), true
+		return e.complexity.Nodes.Values(childComplexity), true
 
 	case "Query.add":
 		if e.complexity.Query.Add == nil {
@@ -457,12 +457,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Relationships.Cursor(childComplexity), true
 
-	case "Relationships.relationships":
-		if e.complexity.Relationships.Relationships == nil {
+	case "Relationships.values":
+		if e.complexity.Relationships.Values == nil {
 			break
 		}
 
-		return e.complexity.Relationships.Relationships(childComplexity), true
+		return e.complexity.Relationships.Values(childComplexity), true
 
 	}
 	return 0, false
@@ -596,12 +596,12 @@ type Relationship implements Entity {
 
 type Relationships {
   cursor: String!
-  relationships: [Relationship!]
+  values: [Relationship!]
 }
 
 type Nodes {
   cursor: String!
-  nodes: [Node!]
+  values: [Node!]
 }
 
 input AddNode {
@@ -1472,7 +1472,7 @@ func (ec *executionContext) _Nodes_cursor(ctx context.Context, field graphql.Col
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Nodes_nodes(ctx context.Context, field graphql.CollectedField, obj *model.Nodes) (ret graphql.Marshaler) {
+func (ec *executionContext) _Nodes_values(ctx context.Context, field graphql.CollectedField, obj *model.Nodes) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -1490,7 +1490,7 @@ func (ec *executionContext) _Nodes_nodes(ctx context.Context, field graphql.Coll
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Nodes, nil
+		return obj.Values, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2353,7 +2353,7 @@ func (ec *executionContext) _Relationships_cursor(ctx context.Context, field gra
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Relationships_relationships(ctx context.Context, field graphql.CollectedField, obj *model.Relationships) (ret graphql.Marshaler) {
+func (ec *executionContext) _Relationships_values(ctx context.Context, field graphql.CollectedField, obj *model.Relationships) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2371,7 +2371,7 @@ func (ec *executionContext) _Relationships_relationships(ctx context.Context, fi
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Relationships, nil
+		return obj.Values, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -4044,9 +4044,9 @@ func (ec *executionContext) _Nodes(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
-		case "nodes":
+		case "values":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Nodes_nodes(ctx, field, obj)
+				return ec._Nodes_values(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)
@@ -4504,9 +4504,9 @@ func (ec *executionContext) _Relationships(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
-		case "relationships":
+		case "values":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Relationships_relationships(ctx, field, obj)
+				return ec._Relationships_values(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)

@@ -54,7 +54,7 @@ func (Node) IsEntity() {}
 
 type Nodes struct {
 	Cursor string  `json:"cursor"`
-	Nodes  []*Node `json:"nodes"`
+	Values []*Node `json:"values"`
 }
 
 type OrderBy struct {
@@ -76,8 +76,8 @@ type Relationship struct {
 func (Relationship) IsEntity() {}
 
 type Relationships struct {
-	Cursor        string          `json:"cursor"`
-	Relationships []*Relationship `json:"relationships"`
+	Cursor string          `json:"cursor"`
+	Values []*Relationship `json:"values"`
 }
 
 type SetNode struct {

@@ -11,7 +11,32 @@ import (
 )
 
 func eval(exp *model.Expression, ent api.Entity) bool {
+
 	val := ent.GetProperty(exp.Key)
+	if val == nil && exp.Key == "type" {
+		val = ent.Type()
+	}
+	if val == nil && exp.Key == "id" {
+		val = ent.ID()
+	}
+	switch v := ent.(type) {
+	case api.Relationship:
+		if strings.HasPrefix(exp.Key, "source.") {
+			return eval(&model.Expression{
+				Key:      strings.TrimPrefix(exp.Key, "source."),
+				Operator: exp.Operator,
+				Value:    exp.Value,
+			}, v.Source())
+		}
+		if strings.HasPrefix(exp.Key, "target.") {
+			return eval(&model.Expression{
+				Key:      strings.TrimPrefix(exp.Key, "target."),
+				Operator: exp.Operator,
+				Value:    exp.Value,
+			}, v.Target())
+		}
+	}
+
 	switch exp.Operator {
 	case model.OperatorEq:
 		return val == exp.Value

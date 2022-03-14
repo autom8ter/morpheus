@@ -423,3 +423,32 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 		closer,
 	)
 }
+
+
+/*
+# query {
+#   get(key: {
+#     type: "actor"
+#     id: "376249"
+#   }){
+#     id
+#     properties
+#     relationships(direction: OUTGOING, filter: {
+#       type: "has_role",
+
+#     }){
+#       cursor
+#       relationships {
+#         id
+#         properties
+#         target {
+#           id
+#           properties
+#         }
+#       }
+#     }
+#     }
+#   }
+
+
+ */

@@ -8,16 +8,16 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"github.com/autom8ter/morpheus/pkg/config"
-	"github.com/autom8ter/morpheus/pkg/helpers"
-	"github.com/autom8ter/morpheus/pkg/logger"
 	"sort"
 
 	"github.com/autom8ter/morpheus/pkg/api"
+	"github.com/autom8ter/morpheus/pkg/config"
 	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/autom8ter/morpheus/pkg/graph/generated"
 	"github.com/autom8ter/morpheus/pkg/graph/model"
+	"github.com/autom8ter/morpheus/pkg/helpers"
+	"github.com/autom8ter/morpheus/pkg/logger"
 	"github.com/autom8ter/morpheus/pkg/raft/fsm"
 	"github.com/google/uuid"
 	"github.com/palantir/stacktrace"
@@ -250,7 +250,7 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 	}
 	return &model.Relationships{
 		Cursor:        r.createCursor(skip),
-		Relationships: rels,
+		Values: rels,
 	}, nil
 }
 
@@ -356,7 +356,7 @@ func (r *queryResolver) List(ctx context.Context, filter model.Filter) (*model.N
 	}
 	return &model.Nodes{
 		Cursor: r.createCursor(skip),
-		Nodes:  nodes,
+		Values:  nodes,
 	}, nil
 }
 

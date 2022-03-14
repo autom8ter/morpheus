@@ -80,12 +80,12 @@ type Relationship implements Entity {
 
 type Relationships {
   cursor: String!
-  relationships: [Relationship!]
+  values: [Relationship!]
 }
 
 type Nodes {
   cursor: String!
-  nodes: [Node!]
+  values: [Node!]
 }
 
 input AddNode {
