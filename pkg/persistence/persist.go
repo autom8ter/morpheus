@@ -90,6 +90,7 @@ func (d *DB) DelNode(nodeType, nodeID string) error {
 }
 
 func (d *DB) RangeNodes(skip int, nodeType string, fn func(node api.Node) bool) error {
+
 	var skipped int
 	key := getNodePath(nodeType, "")
 	if err := d.db.View(func(txn *badger.Txn) error {
@@ -97,7 +98,7 @@ func (d *DB) RangeNodes(skip int, nodeType string, fn func(node api.Node) bool) 
 		opt.PrefetchSize = 10
 		it := txn.NewIterator(opt)
 		defer it.Close()
-		for it.Rewind(); it.ValidForPrefix(key); it.Next() {
+		for it.Seek(key); it.ValidForPrefix(key); it.Next() {
 			if skipped < skip {
 				skip++
 				continue
@@ -169,7 +170,7 @@ func (d *DB) RangeRelationships(skip int, relation string, fn func(node api.Rela
 		opt.PrefetchSize = 10
 		it := txn.NewIterator(opt)
 		defer it.Close()
-		for it.Rewind(); it.ValidForPrefix(source); it.Next() {
+		for it.Seek(source); it.ValidForPrefix(source); it.Next() {
 			if skipped < skip {
 				skip++
 				continue
