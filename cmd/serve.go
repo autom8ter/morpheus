@@ -6,7 +6,7 @@ import (
 	"github.com/autom8ter/morpheus/pkg/config"
 	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/logger"
-	"github.com/autom8ter/morpheus/pkg/persistance"
+	"github.com/autom8ter/morpheus/pkg/persistence"
 	"github.com/autom8ter/morpheus/pkg/server"
 	"github.com/spf13/cobra"
 	"log"
@@ -41,7 +41,7 @@ var serveCmd = &cobra.Command{
 				},
 			}}
 		}
-		g, err := persistance.NewPersistantGraph(fmt.Sprintf("%s/storage", cfg.Database.StoragePath), defaultCacheSize)
+		g, err := persistence.NewPersistantGraph(fmt.Sprintf("%s/storage", cfg.Database.StoragePath), defaultCacheSize, 100)
 		if err != nil {
 			panic(err)
 		}
@@ -58,6 +58,3 @@ var serveCmd = &cobra.Command{
 	},
 }
 
-func init() {
-	rootCmd.AddCommand(serveCmd)
-}

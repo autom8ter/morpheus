@@ -1,4 +1,4 @@
-package cmd
+package client
 
 import (
 	"context"
@@ -10,6 +10,11 @@ import (
 	"io/ioutil"
 	"time"
 )
+
+var RootCmd = &cobra.Command{
+	Use: "client",
+	Short: "client operations",
+}
 
 func getQueryCmd() *cobra.Command {
 	var (
@@ -62,5 +67,5 @@ func getQueryCmd() *cobra.Command {
 }
 
 func init() {
-	rootCmd.AddCommand(getQueryCmd())
+	RootCmd.AddCommand(getQueryCmd())
 }

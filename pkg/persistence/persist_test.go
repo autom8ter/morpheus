@@ -1,4 +1,4 @@
-package persistance
+package persistence
 
 import (
 	"encoding/json"
@@ -16,7 +16,7 @@ func Test(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	g, err := NewPersistantGraph(dir, 100)
+	g, err := NewPersistantGraph(dir, 100, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func Benchmark(b *testing.B) {
 		b.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	g, err := NewPersistantGraph(dir, 1000000)
+	g, err := NewPersistantGraph(dir, 100, 100000)
 	if err != nil {
 		b.Fatal(err)
 	}

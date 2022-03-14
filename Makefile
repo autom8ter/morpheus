@@ -6,11 +6,11 @@ run:
 dataloader:
 	@cd pkg/dataloader; go run github.com/vektah/dataloaden NodeLoader string *github.com/autom8ter/morpheus/pkg/api.Node
 
-bench-storage:
-	@go test -bench=Benchmark ./pkg/storage -benchmem -run=^$
+bench-persist:
+	@go test -bench=Benchmark ./pkg/persistence -benchmem -run=^$
 
-test-storage:
-	@go test -v ./pkg/storage
+test-persist:
+	@go test -v ./pkg/persistence
 
 query-size:
 	@go run main.go query -f examples/queries/size.graphql

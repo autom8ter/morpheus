@@ -6,6 +6,7 @@ import (
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/hashicorp/raft"
+	"github.com/palantir/stacktrace"
 	"io"
 )
 
@@ -113,7 +114,7 @@ func NewGraphFSM(g api.Graph) raft.FSM {
 		ApplyFunc: func(log *raft.Log) interface{} {
 			cmd := &CMD{}
 			if err := encode.Unmarshal(log.Data, cmd); err != nil {
-				return err
+				return stacktrace.Propagate(err, "")
 			}
 			switch cmd.Method {
 			case AddNodes:
@@ -121,7 +122,7 @@ func NewGraphFSM(g api.Graph) raft.FSM {
 				for _, n := range cmd.AddNodes {
 					n, err := g.AddNode(n.Type, n.ID, n.Properties)
 					if err != nil {
-						return err
+						return stacktrace.Propagate(err, "")
 					}
 					nodes = append(nodes, n)
 				}
@@ -130,7 +131,7 @@ func NewGraphFSM(g api.Graph) raft.FSM {
 				for _, n := range cmd.DelNodes {
 					err := g.DelNode(n.Type, n.ID)
 					if err != nil {
-						return err
+						return stacktrace.Propagate(err, "")
 					}
 				}
 				return nil
@@ -139,7 +140,7 @@ func NewGraphFSM(g api.Graph) raft.FSM {
 				for _, node := range cmd.SetNodeProperties {
 					n, err := g.GetNode(node.Type, node.ID)
 					if err != nil {
-						return err
+						return stacktrace.Propagate(err, "")
 					}
 					n.SetProperties(node.Properties)
 					nodes = append(nodes, n)
@@ -150,7 +151,7 @@ func NewGraphFSM(g api.Graph) raft.FSM {
 				for _, relationship := range cmd.SetRelationshipProperties {
 					r, err := g.GetRelationship(relationship.Relationship, relationship.RelationshipID)
 					if err != nil {
-						return err
+						return stacktrace.Propagate(err, "")
 					}
 					r.SetProperties(relationship.Properties)
 					rels = append(rels, r)
@@ -161,11 +162,11 @@ func NewGraphFSM(g api.Graph) raft.FSM {
 				for _, relation := range cmd.AddRelationships {
 					n, err := g.GetNode(relation.NodeType, relation.NodeID)
 					if err != nil {
-						return err
+						return stacktrace.Propagate(err, "")
 					}
 					n2, err := g.GetNode(relation.Node2Type, relation.Node2ID)
 					if err != nil {
-						return err
+						return stacktrace.Propagate(err, "")
 					}
 					rels = append(rels, n.AddRelationship(api.Direction(relation.Direction), relation.Relationship, relation.RelationshipID, n2))
 				}
@@ -174,7 +175,7 @@ func NewGraphFSM(g api.Graph) raft.FSM {
 				for _, relation := range cmd.DelRelationships {
 					n, err := g.GetNode(relation.NodeType, relation.NodeID)
 					if err != nil {
-						return err
+						return stacktrace.Propagate(err, "")
 					}
 					n.DelRelationship(api.Direction(relation.Direction), relation.Relationship, relation.RelationshipID)
 				}

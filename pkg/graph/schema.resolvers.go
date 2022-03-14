@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/autom8ter/morpheus/pkg/config"
 	"github.com/autom8ter/morpheus/pkg/helpers"
+	"github.com/autom8ter/morpheus/pkg/logger"
 	"sort"
 
 	"github.com/autom8ter/morpheus/pkg/api"
@@ -26,13 +27,13 @@ import (
 func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[string]interface{}, error) {
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.RootCause(err)
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.RootCause(err)
 	}
 	return n.Properties(), nil
 }
@@ -40,13 +41,13 @@ func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[str
 func (r *nodeResolver) GetProperty(ctx context.Context, obj *model.Node, key string) (interface{}, error) {
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.RootCause(err)
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.RootCause(err)
 	}
 	return n.GetProperty(key), nil
 }
@@ -70,14 +71,14 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 	}
 	bits, err := encode.Marshal(cmd)
 	if err != nil {
-		return false, err
+		return false, stacktrace.RootCause(err)
 	}
 	val, err := r.raft.Apply(bits)
 	if err != nil {
-		return false, err
+		return false, stacktrace.RootCause(err)
 	}
 	if err, ok := val.(error); ok {
-		return false, err
+		return false, stacktrace.RootCause(err)
 	}
 	return true, nil
 }
@@ -85,17 +86,18 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, id string) (*model.Relationship, error) {
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.RootCause(err)
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.RootCause(stacktrace.Propagate(err, ""))
 	}
 	rel, ok := n.GetRelationship(api.Direction(direction), relationship, id)
 	if !ok {
-		return nil, stacktrace.Propagate(constants.ErrNotFound, "")
+
+		return nil, stacktrace.RootCause(constants.ErrNotFound)
 	}
 	return toRelationship(rel), nil
 }
@@ -103,7 +105,7 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, dir
 func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, nodeKey model.Key) (*model.Relationship, error) {
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.RootCause(err)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -125,14 +127,14 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, dir
 	}
 	bits, err := encode.Marshal(cmd)
 	if err != nil {
-		return nil, err
+		return nil, stacktrace.RootCause(err)
 	}
 	val, err := r.raft.Apply(bits)
 	if err != nil {
-		return nil, err
+		return nil, stacktrace.RootCause(err)
 	}
 	if err, ok := val.(error); ok {
-		return nil, err
+		return nil, stacktrace.RootCause(err)
 	}
 	return toRelationship(val.([]api.Relationship)[0]), nil
 }
@@ -158,14 +160,14 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, dir
 	}
 	bits, err := encode.Marshal(cmd)
 	if err != nil {
-		return false, err
+		return false, stacktrace.RootCause(err)
 	}
 	val, err := r.raft.Apply(bits)
 	if err != nil {
-		return false, err
+		return false, stacktrace.RootCause(err)
 	}
 	if err, ok := val.(error); ok {
-		return false, err
+		return false, stacktrace.RootCause(err)
 	}
 	return true, nil
 }
@@ -173,19 +175,25 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, dir
 func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direction model.Direction, filter *model.Filter) (*model.Relationships, error) {
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.RootCause(err)
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		logger.L.Error("failed to list relationships", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return nil, stacktrace.RootCause(err)
 	}
 	skip := 0
 	if filter.Cursor != nil {
 		skp, err := r.parseCursor(*filter.Cursor)
 		if err != nil {
-			return nil, err
+			logger.L.Error("failed to list relationships", map[string]interface{}{
+				"error": stacktrace.Propagate(err, ""),
+			})
+			return nil, stacktrace.RootCause(err)
 		}
 		skip = skp
 	}
@@ -249,7 +257,10 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 func (r *queryResolver) Types(ctx context.Context) ([]string, error) {
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		logger.L.Error("failed to list relationships", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return nil, stacktrace.RootCause(err)
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -259,13 +270,16 @@ func (r *queryResolver) Types(ctx context.Context) ([]string, error) {
 func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, error) {
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.RootCause(err)
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(key.Type, key.ID)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return nil, stacktrace.RootCause(err)
 	}
 	return toNode(n), nil
 }
@@ -273,7 +287,7 @@ func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, er
 func (r *queryResolver) List(ctx context.Context, filter model.Filter) (*model.Nodes, error) {
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.RootCause(err)
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -283,7 +297,10 @@ func (r *queryResolver) List(ctx context.Context, filter model.Filter) (*model.N
 	if filter.Cursor != nil {
 		skp, err := r.parseCursor(*filter.Cursor)
 		if err != nil {
-			return nil, err
+			logger.L.Error("graphql resolver error", map[string]interface{}{
+				"error": stacktrace.Propagate(err, ""),
+			})
+			return nil, stacktrace.RootCause(err)
 		}
 		skip = skp
 	}
@@ -303,7 +320,7 @@ func (r *queryResolver) List(ctx context.Context, filter model.Filter) (*model.N
 		nodes = append(nodes, toNode(node))
 		return true
 	}); err != nil {
-		return nil, err
+		return nil, stacktrace.RootCause(err)
 	}
 	if len(nodes) > 0 {
 		if filter.OrderBy != nil && nodes[0].Properties[filter.OrderBy.Field] != nil {
@@ -356,7 +373,7 @@ func (r *queryResolver) Size(ctx context.Context) (int, error) {
 func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node, error) {
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.RootCause(err)
 	}
 	if add.ID == nil {
 		id := uuid.New().String()
@@ -376,14 +393,20 @@ func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node
 	}
 	bits, err := encode.Marshal(cmd)
 	if err != nil {
-		return nil, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return nil, stacktrace.RootCause(err)
 	}
 	val, err := r.raft.Apply(bits)
 	if err != nil {
-		return nil, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return nil, stacktrace.RootCause(err)
 	}
 	if err, ok := val.(error); ok {
-		return nil, err
+		return nil, stacktrace.RootCause(err)
 	}
 
 	return toNode(val.([]api.Node)[0]), nil
@@ -392,7 +415,7 @@ func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node
 func (r *queryResolver) Set(ctx context.Context, set model.SetNode) (*model.Node, error) {
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.RootCause(err)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -408,14 +431,20 @@ func (r *queryResolver) Set(ctx context.Context, set model.SetNode) (*model.Node
 	}
 	bits, err := encode.Marshal(cmd)
 	if err != nil {
-		return nil, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return nil, stacktrace.RootCause(err)
 	}
 	val, err := r.raft.Apply(bits)
 	if err != nil {
-		return nil, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return nil, stacktrace.RootCause(err)
 	}
 	if err, ok := val.(error); ok {
-		return nil, err
+		return nil, stacktrace.RootCause(err)
 	}
 	return toNode(val.([]api.Node)[0]), nil
 }
@@ -438,14 +467,23 @@ func (r *queryResolver) Del(ctx context.Context, del model.Key) (bool, error) {
 	}
 	bits, err := encode.Marshal(cmd)
 	if err != nil {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	val, err := r.raft.Apply(bits)
 	if err != nil {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	if err, ok := val.(error); ok {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	return true, nil
 }
@@ -473,16 +511,25 @@ func (r *queryResolver) BulkAdd(ctx context.Context, add []*model.AddNode) (bool
 	}
 	bits, err := encode.Marshal(cmd)
 	if err != nil {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	val, err := r.raft.Apply(bits)
 	if err != nil {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	if err, ok := val.(error); ok {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	return true, nil
 }
@@ -506,16 +553,25 @@ func (r *queryResolver) BulkSet(ctx context.Context, set []*model.SetNode) (bool
 	}
 	bits, err := encode.Marshal(cmd)
 	if err != nil {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	val, err := r.raft.Apply(bits)
 	if err != nil {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	if err, ok := val.(error); ok {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	return true, nil
 }
@@ -538,16 +594,25 @@ func (r *queryResolver) BulkDel(ctx context.Context, del []*model.Key) (bool, er
 	}
 	bits, err := encode.Marshal(cmd)
 	if err != nil {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	val, err := r.raft.Apply(bits)
 	if err != nil {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	if err, ok := val.(error); ok {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	return true, nil
 }
@@ -555,10 +620,16 @@ func (r *queryResolver) BulkDel(ctx context.Context, del []*model.Key) (bool, er
 func (r *queryResolver) Login(ctx context.Context, username string, password string) (string, error) {
 	token, err := r.mw.Login(username, password)
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return "", stacktrace.Propagate(err, "")
 	}
 	expired, _, err := helpers.JWTExpired(token)
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return "", stacktrace.Propagate(err, "")
 	}
 	if expired {
@@ -570,13 +641,16 @@ func (r *queryResolver) Login(ctx context.Context, username string, password str
 func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error) {
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.RootCause(err)
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetRelationship(obj.Type, obj.ID)
 	if err != nil {
-		return nil, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return nil, stacktrace.RootCause(err)
 	}
 	return n.Properties(), nil
 }
@@ -590,7 +664,10 @@ func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relat
 	defer r.mu.RUnlock()
 	n, err := r.graph.GetRelationship(obj.Type, obj.ID)
 	if err != nil {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	return n.GetProperty(key), nil
 }
@@ -616,14 +693,23 @@ func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Rel
 	}
 	bits, err := encode.Marshal(cmd)
 	if err != nil {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	val, err := r.raft.Apply(bits)
 	if err != nil {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	if err, ok := val.(error); ok {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	return true, nil
 }

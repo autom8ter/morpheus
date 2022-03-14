@@ -5,6 +5,7 @@ import (
 	"github.com/autom8ter/morpheus/pkg/datastructure"
 	"github.com/palantir/stacktrace"
 	"sort"
+	"sync"
 )
 
 type iEntity struct {
@@ -181,8 +182,11 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 	nodes := map[string]datastructure.OrderedMap{}
 	relationships := map[string]datastructure.OrderedMap{}
 	nodeRelationships := map[string]map[string]map[Direction]map[string]datastructure.OrderedMap{}
+	var mu sync.RWMutex
 	return newGraph(
 		func(nodeType string, nodeID string) (Node, error) {
+			mu.RLock()
+			defer mu.RUnlock()
 			if nodes[nodeType] == nil {
 				return nil, stacktrace.Propagate(constants.ErrNotFound, "")
 			}
@@ -193,6 +197,8 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 			return val.(Node), nil
 		},
 		func(nodeType string, nodeID string, properties map[string]interface{}) (Node, error) {
+			mu.Lock()
+			defer mu.Unlock()
 			if nodes[nodeType] == nil {
 				nodes[nodeType] = datastructure.NewOrderedMap()
 			}
@@ -215,6 +221,8 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 			node := NewNode(
 				nodeEntity,
 				func(direction Direction, relation, relationID string) (Relationship, bool) {
+					mu.RLock()
+					defer mu.RUnlock()
 					if nodeRelationships[nodeType][nodeID][direction] == nil {
 						return nil, false
 					}
@@ -228,6 +236,8 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 					return val.(Relationship), true
 				},
 				func(direction Direction, relation, relationshipID string, node Node) Relationship {
+					mu.Lock()
+					defer mu.Unlock()
 					if relationships[relation] == nil {
 						relationships[relation] = datastructure.NewOrderedMap()
 					}
@@ -248,11 +258,19 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 							return val.(Node)
 						},
 					)
-					if nodeRelationships[nodeType][nodeID][direction][relation] == nil {
-						nodeRelationships[nodeType][nodeID][direction][relation] = datastructure.NewOrderedMap()
+					if nodeRelationships[nodeType][nodeID][Outgoing][relation] == nil {
+						nodeRelationships[nodeType][nodeID][Outgoing][relation] = datastructure.NewOrderedMap()
 					}
+					if nodeRelationships[nodeType][nodeID][Incoming][relation] == nil {
+						nodeRelationships[nodeType][nodeID][Incoming][relation] = datastructure.NewOrderedMap()
+					}
+
 					if nodeRelationships[node.Type()][node.ID()][Incoming][relation] == nil {
 						nodeRelationships[node.Type()][node.ID()][Incoming][relation] = datastructure.NewOrderedMap()
+					}
+
+					if nodeRelationships[node.Type()][node.ID()][Outgoing][relation] == nil {
+						nodeRelationships[node.Type()][node.ID()][Outgoing][relation] = datastructure.NewOrderedMap()
 					}
 
 					nodeRelationships[nodeType][nodeID][direction][relation].Add(relationship.ID(), relationship)
@@ -262,11 +280,13 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 					} else {
 						nodeRelationships[node.Type()][node.ID()][Outgoing][relation].Add(relationship.ID(), relationship)
 					}
-					relationships[relation].Add(relationshipID, relation)
+					relationships[relation].Add(relationshipID, relationship)
 
 					return relationship
 				},
 				func(direction Direction, relationship, id string) {
+					mu.Lock()
+					defer mu.Unlock()
 					if nodeRelationships[nodeType] == nil {
 						return
 					}
@@ -293,6 +313,8 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 					}
 				},
 				func(skip int, direction Direction, relation string, fn func(node Relationship) bool) {
+					mu.RLock()
+					defer mu.RUnlock()
 					if nodeRelationships[nodeType] == nil {
 						return
 					}
@@ -314,6 +336,8 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 			return node, nil
 		},
 		func(nodeType string, nodeID string) error {
+			mu.Lock()
+			defer mu.Unlock()
 			for _, types := range nodeRelationships[nodeType][nodeID] {
 				for relationship, values := range types {
 					values.Range(0, func(val interface{}) bool {
@@ -334,6 +358,8 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 			return nil
 		},
 		func(skip int, nodeType string, fn func(node Node) bool) error {
+			mu.RLock()
+			defer mu.RUnlock()
 			if nodes[nodeType] == nil {
 				return nil
 			}
@@ -343,6 +369,8 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 			return nil
 		},
 		func() []string {
+			mu.RLock()
+			defer mu.RUnlock()
 			var types []string
 			for k, _ := range nodes {
 				types = append(types, k)
@@ -351,6 +379,8 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 			return types
 		},
 		func(typee string, id string) (Relationship, error) {
+			mu.RLock()
+			defer mu.RUnlock()
 			if relationships[typee] == nil {
 				return nil, stacktrace.Propagate(constants.ErrNotFound, "")
 			}
@@ -361,6 +391,8 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 			return val.(Relationship), nil
 		},
 		func(skip int, typee string, fn func(relation Relationship) bool) error {
+			mu.RLock()
+			defer mu.RUnlock()
 			if nodes[typee] == nil {
 				return nil
 			}
@@ -370,6 +402,8 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 			return nil
 		},
 		func() []string {
+			mu.RLock()
+			defer mu.RUnlock()
 			var types []string
 			for k, _ := range relationships {
 				types = append(types, k)
@@ -378,6 +412,8 @@ func NewGraph(entityFunc EntityCreationFunc, closer func() error) Graph {
 			return types
 		},
 		func() int {
+			mu.RLock()
+			defer mu.RUnlock()
 			size := 0
 			for _, n := range nodes {
 				size = size + n.Len()

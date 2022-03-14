@@ -1,8 +1,14 @@
 package cmd
 
 import (
+	"github.com/autom8ter/morpheus/cmd/client"
 	"github.com/spf13/cobra"
 )
+
+func init() {
+	rootCmd.AddCommand(serveCmd, client.RootCmd)
+
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{

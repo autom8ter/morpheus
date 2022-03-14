@@ -48,6 +48,8 @@ func NewClient(username, password, endpoint string, timeout time.Duration) *Clie
 }
 
 func (c *Client) checkToken() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.token != "" {
 		if c.next > time.Now().Unix() {
 			return nil
@@ -61,9 +63,7 @@ func (c *Client) checkToken() error {
 			return nil
 		}
 	}
-	var loginQuery = fmt.Sprintf(`query {
-    	login(username: "%s", password: "%s")
-	}`, c.username, c.password)
+	var loginQuery = fmt.Sprintf(`query { login(username: "%s", password: "%s") }`, c.username, c.password)
 	req := graphql.NewRequest(loginQuery)
 	//req.Var("user", c.username)
 	//req.Var("password", c.password)
@@ -88,6 +88,29 @@ func (c *Client) checkToken() error {
 }
 
 func (c *Client) Query(ctx context.Context, query string, vars map[string]string) (map[string]interface{}, error) {
+	if err := c.checkToken(); err != nil {
+		return nil, err
+	}
+	req := graphql.NewRequest(query)
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.token))
+	if vars != nil {
+		for k, v := range vars {
+			req.Var(k, v)
+		}
+	}
+	resp := map[string]interface{}{}
+	bearToken := req.Header.Get("Authorization")
+	token := strings.TrimSpace(strings.TrimPrefix(bearToken, "Bearer "))
+	if token == "" {
+		panic(bearToken)
+	}
+	if err := c.client.Run(ctx, req, &resp); err != nil {
+		return nil, stacktrace.Propagate(err, "failed to do request")
+	}
+	return resp, nil
+}
+
+func (c *Client) Queryx(ctx context.Context, query string, vars map[string]interface{}) (map[string]interface{}, error) {
 	if err := c.checkToken(); err != nil {
 		return nil, err
 	}

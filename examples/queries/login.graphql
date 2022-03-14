@@ -1,3 +1,11 @@
-query {
-    login(username: "morpheus", password: "morpheus")
+query ($id: String, $type: String!, $key: String!) {
+    add(add: {
+        id: $id
+        type: $type,
+        properties: {
+            "name": "coleman"
+        }
+    }){
+        properties
+    }
 }

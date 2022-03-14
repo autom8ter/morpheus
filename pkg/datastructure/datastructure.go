@@ -1,5 +1,7 @@
 package datastructure
 
+import "sync"
+
 type OrderedMap interface {
 	Get(key string) (interface{}, bool)
 	Range(skip int, fn func(val interface{}) bool)
@@ -11,17 +13,21 @@ type OrderedMap interface {
 
 func NewOrderedMap() OrderedMap {
 	return &orderedMap{
+		mu:     sync.RWMutex{},
 		keys:   nil,
 		values: map[string]interface{}{},
 	}
 }
 
 type orderedMap struct {
+	mu     sync.RWMutex
 	keys   []string
 	values map[string]interface{}
 }
 
 func (o *orderedMap) Get(key string) (interface{}, bool) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
 	if val, ok := o.values[key]; ok {
 		return val, true
 	}
@@ -29,6 +35,8 @@ func (o *orderedMap) Get(key string) (interface{}, bool) {
 }
 
 func (o *orderedMap) Del(key string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	if _, ok := o.values[key]; ok {
 		remove(o.keys, key)
 		delete(o.values, key)
@@ -36,6 +44,8 @@ func (o *orderedMap) Del(key string) {
 }
 
 func (o *orderedMap) Add(key string, val interface{}) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	if val, ok := o.values[key]; ok {
 		o.values[key] = val
 		return
@@ -45,6 +55,8 @@ func (o *orderedMap) Add(key string, val interface{}) {
 }
 
 func (o *orderedMap) Range(skip int, fn func(val interface{}) bool) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
 	for _, key := range o.keys[skip:] {
 		if !fn(o.values[key]) {
 			break
@@ -53,10 +65,14 @@ func (o *orderedMap) Range(skip int, fn func(val interface{}) bool) {
 }
 
 func (o *orderedMap) Len() int {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
 	return len(o.values)
 }
 
 func (o *orderedMap) Keys() []string {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
 	return o.keys
 }
 

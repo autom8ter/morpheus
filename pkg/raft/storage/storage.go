@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/helpers"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/hashicorp/raft"
+	"github.com/palantir/stacktrace"
 	"math"
+	"os"
 	"strconv"
 )
 
@@ -22,9 +23,10 @@ type Storage struct {
 }
 
 func NewStorage(path string) (*Storage, error) {
+	os.MkdirAll(path, 0700)
 	db, err := badger.Open(badger.DefaultOptions(path))
 	if err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "")
 	}
 	return &Storage{db: db}, nil
 }
@@ -39,14 +41,14 @@ func (b *Storage) FirstIndex() (uint64, error) {
 			k := string(item.Key()[len(dbLogsPrefix):])
 			idx, err := strconv.ParseUint(k, 10, 64)
 			if err != nil {
-				return err
+				return stacktrace.Propagate(err, "")
 			}
 			first = idx
 		}
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return 0, stacktrace.Propagate(err, "")
 	}
 	return first, nil
 }
@@ -68,13 +70,13 @@ func (b *Storage) LastIndex() (uint64, error) {
 			k := string(item.Key()[len(dbLogsPrefix):])
 			idx, err := strconv.ParseUint(k, 10, 64)
 			if err != nil {
-				return err
+				return stacktrace.Propagate(err, "")
 			}
 			last = idx
 		}
 		return nil
 	}); err != nil {
-		return 0, err
+		return 0, stacktrace.Propagate(err, "")
 	}
 	return last, nil
 }
@@ -83,7 +85,7 @@ func (b *Storage) GetLog(idx uint64, log *raft.Log) error {
 	return b.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte(fmt.Sprintf("%s%d", dbLogsPrefix, idx)))
 		if err != nil {
-			return err
+			return stacktrace.Propagate(err, "")
 		}
 		if item == nil {
 			return raft.ErrLogNotFound
@@ -196,7 +198,7 @@ func (b *Storage) Get(k []byte) ([]byte, error) {
 	key := []byte(fmt.Sprintf("%s%d", dbConfPrefix, k))
 	item, err := txn.Get(key)
 	if item == nil {
-		return nil, constants.ErrNotFound
+		return nil, fmt.Errorf("not found")
 	}
 	if err != nil {
 		return nil, err
