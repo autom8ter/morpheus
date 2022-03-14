@@ -5,9 +5,6 @@ package graph
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
-	"fmt"
 	"sort"
 
 	"github.com/autom8ter/morpheus/pkg/api"
@@ -83,7 +80,7 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 	return true, nil
 }
 
-func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, id string) (*model.Relationship, error) {
+func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, relationship string, id string) (*model.Relationship, error) {
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
@@ -94,7 +91,7 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, dir
 	if err != nil {
 		return nil, stacktrace.RootCause(stacktrace.Propagate(err, ""))
 	}
-	rel, ok := n.GetRelationship(api.Direction(direction), relationship, id)
+	rel, ok := n.GetRelationship(relationship, id)
 	if !ok {
 
 		return nil, stacktrace.RootCause(constants.ErrNotFound)
@@ -102,24 +99,20 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, dir
 	return toRelationship(rel), nil
 }
 
-func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, nodeKey model.Key) (*model.Relationship, error) {
+func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, relationship string, nodeKey model.Key) (*model.Relationship, error) {
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	h := sha1.New()
-	h.Write([]byte(fmt.Sprintf("%s_%s_%s_%s_%s_%s", obj.Type, obj.ID, direction, relationship, nodeKey.Type, nodeKey.ID)))
 	cmd := &fsm.CMD{
 		Method: fsm.AddRelationships,
 		AddRelationships: []fsm.AddRelationship{
 			{
 				NodeType:       obj.Type,
 				NodeID:         obj.ID,
-				Direction:      string(direction),
 				Relationship:   relationship,
-				RelationshipID: hex.EncodeToString(h.Sum(nil)),
 				Node2Type:      nodeKey.Type,
 				Node2ID:        nodeKey.ID,
 			},
@@ -139,7 +132,7 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, dir
 	return toRelationship(val.([]api.Relationship)[0]), nil
 }
 
-func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, direction model.Direction, key model.Key) (bool, error) {
+func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, key model.Key) (bool, error) {
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
@@ -154,7 +147,6 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, dir
 				NodeID:         obj.ID,
 				Relationship:   obj.Type,
 				RelationshipID: obj.ID,
-				Direction:      string(direction),
 			},
 		},
 	}
@@ -172,7 +164,7 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, dir
 	return true, nil
 }
 
-func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direction model.Direction, filter *model.Filter) (*model.Relationships, error) {
+func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where model.RelationWhere) (*model.Relationships, error) {
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
@@ -187,8 +179,8 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 		return nil, stacktrace.RootCause(err)
 	}
 	skip := 0
-	if filter.Cursor != nil {
-		skp, err := r.parseCursor(*filter.Cursor)
+	if where.Cursor != nil {
+		skp, err := r.parseCursor(*where.Cursor)
 		if err != nil {
 			logger.L.Error("failed to list relationships", map[string]interface{}{
 				"error": stacktrace.Propagate(err, ""),
@@ -200,15 +192,15 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 
 	var rels []*model.Relationship
 	pageSize := 25
-	if filter.PageSize != nil {
-		pageSize = *filter.PageSize
+	if where.PageSize != nil {
+		pageSize = *where.PageSize
 	}
-	n.Relationships(skip, api.Direction(direction), filter.Type, func(relationship api.Relationship) bool {
+	n.Relationships(skip, where.Relation, where.TargetType, func(relationship api.Relationship) bool {
 		if len(rels) >= pageSize {
 			return false
 		}
 		skip++
-		for _, exp := range filter.Expressions {
+		for _, exp := range where.Expressions {
 			if !eval(exp, relationship) {
 				return true
 			}
@@ -217,27 +209,27 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 		return true
 	})
 	if len(rels) > 0 {
-		if filter.OrderBy != nil && rels[0].Properties[filter.OrderBy.Field] != nil {
+		if where.OrderBy != nil && rels[0].Properties[where.OrderBy.Field] != nil {
 			sort.Slice(rels, func(i, j int) bool {
-				if rels[i].Properties[filter.OrderBy.Field] == nil {
+				if rels[i].Properties[where.OrderBy.Field] == nil {
 					return false
 				}
-				if rels[j].Properties[filter.OrderBy.Field] == nil {
+				if rels[j].Properties[where.OrderBy.Field] == nil {
 					return true
 				}
-				if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
-					if val, err := cast.ToFloat64E(rels[i].Properties[filter.OrderBy.Field]); err == nil {
-						return val < cast.ToFloat64(rels[j].Properties[filter.OrderBy.Field])
+				if where.OrderBy.Reverse != nil && *where.OrderBy.Reverse {
+					if val, err := cast.ToFloat64E(rels[i].Properties[where.OrderBy.Field]); err == nil {
+						return val < cast.ToFloat64(rels[j].Properties[where.OrderBy.Field])
 					}
-					return cast.ToString(rels[i].Properties[filter.OrderBy.Field]) < cast.ToString(rels[j].Properties[filter.OrderBy.Field])
+					return cast.ToString(rels[i].Properties[where.OrderBy.Field]) < cast.ToString(rels[j].Properties[where.OrderBy.Field])
 				}
-				if val, err := cast.ToFloat64E(rels[i].Properties[filter.OrderBy.Field]); err == nil {
-					return val > cast.ToFloat64(rels[j].Properties[filter.OrderBy.Field])
+				if val, err := cast.ToFloat64E(rels[i].Properties[where.OrderBy.Field]); err == nil {
+					return val > cast.ToFloat64(rels[j].Properties[where.OrderBy.Field])
 				}
-				return cast.ToString(rels[i].Properties[filter.OrderBy.Field]) > cast.ToString(rels[j].Properties[filter.OrderBy.Field])
+				return cast.ToString(rels[i].Properties[where.OrderBy.Field]) > cast.ToString(rels[j].Properties[where.OrderBy.Field])
 			})
 		} else {
-			if filter.OrderBy != nil && filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+			if where.OrderBy != nil && where.OrderBy.Reverse != nil && *where.OrderBy.Reverse {
 				sort.Slice(rels, func(i, j int) bool {
 					return rels[i].ID < rels[j].ID
 				})
@@ -249,7 +241,7 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, direc
 		}
 	}
 	return &model.Relationships{
-		Cursor:        r.createCursor(skip),
+		Cursor: r.createCursor(skip),
 		Values: rels,
 	}, nil
 }
@@ -284,7 +276,7 @@ func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, er
 	return toNode(n), nil
 }
 
-func (r *queryResolver) List(ctx context.Context, filter model.Filter) (*model.Nodes, error) {
+func (r *queryResolver) List(ctx context.Context, where model.NodeWhere) (*model.Nodes, error) {
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
@@ -294,8 +286,8 @@ func (r *queryResolver) List(ctx context.Context, filter model.Filter) (*model.N
 	var nodes []*model.Node
 	limit := 25
 	skip := 0
-	if filter.Cursor != nil {
-		skp, err := r.parseCursor(*filter.Cursor)
+	if where.Cursor != nil {
+		skp, err := r.parseCursor(*where.Cursor)
 		if err != nil {
 			logger.L.Error("graphql resolver error", map[string]interface{}{
 				"error": stacktrace.Propagate(err, ""),
@@ -304,15 +296,15 @@ func (r *queryResolver) List(ctx context.Context, filter model.Filter) (*model.N
 		}
 		skip = skp
 	}
-	if filter.PageSize != nil {
-		limit = *filter.PageSize
+	if where.PageSize != nil {
+		limit = *where.PageSize
 	}
-	if err := r.graph.RangeNodes(skip, filter.Type, func(node api.Node) bool {
+	if err := r.graph.RangeNodes(skip, where.Type, func(node api.Node) bool {
 		if len(nodes) >= limit {
 			return false
 		}
 		skip++
-		for _, exp := range filter.Expressions {
+		for _, exp := range where.Expressions {
 			if !eval(exp, node) {
 				return true
 			}
@@ -323,27 +315,27 @@ func (r *queryResolver) List(ctx context.Context, filter model.Filter) (*model.N
 		return nil, stacktrace.RootCause(err)
 	}
 	if len(nodes) > 0 {
-		if filter.OrderBy != nil && nodes[0].Properties[filter.OrderBy.Field] != nil {
+		if where.OrderBy != nil && nodes[0].Properties[where.OrderBy.Field] != nil {
 			sort.Slice(nodes, func(i, j int) bool {
-				if nodes[i].Properties[filter.OrderBy.Field] == nil {
+				if nodes[i].Properties[where.OrderBy.Field] == nil {
 					return false
 				}
-				if nodes[j].Properties[filter.OrderBy.Field] == nil {
+				if nodes[j].Properties[where.OrderBy.Field] == nil {
 					return true
 				}
-				if filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
-					if val, err := cast.ToFloat64E(nodes[i].Properties[filter.OrderBy.Field]); err == nil {
-						return val < cast.ToFloat64(nodes[j].Properties[filter.OrderBy.Field])
+				if where.OrderBy.Reverse != nil && *where.OrderBy.Reverse {
+					if val, err := cast.ToFloat64E(nodes[i].Properties[where.OrderBy.Field]); err == nil {
+						return val < cast.ToFloat64(nodes[j].Properties[where.OrderBy.Field])
 					}
-					return cast.ToString(nodes[i].Properties[filter.OrderBy.Field]) < cast.ToString(nodes[j].Properties[filter.OrderBy.Field])
+					return cast.ToString(nodes[i].Properties[where.OrderBy.Field]) < cast.ToString(nodes[j].Properties[where.OrderBy.Field])
 				}
-				if val, err := cast.ToFloat64E(nodes[i].Properties[filter.OrderBy.Field]); err == nil {
-					return val > cast.ToFloat64(nodes[j].Properties[filter.OrderBy.Field])
+				if val, err := cast.ToFloat64E(nodes[i].Properties[where.OrderBy.Field]); err == nil {
+					return val > cast.ToFloat64(nodes[j].Properties[where.OrderBy.Field])
 				}
-				return cast.ToString(nodes[i].Properties[filter.OrderBy.Field]) > cast.ToString(nodes[j].Properties[filter.OrderBy.Field])
+				return cast.ToString(nodes[i].Properties[where.OrderBy.Field]) > cast.ToString(nodes[j].Properties[where.OrderBy.Field])
 			})
 		} else {
-			if filter.OrderBy != nil && filter.OrderBy.Reverse != nil && *filter.OrderBy.Reverse {
+			if where.OrderBy != nil && where.OrderBy.Reverse != nil && *where.OrderBy.Reverse {
 				sort.Slice(nodes, func(i, j int) bool {
 					return nodes[i].ID < nodes[j].ID
 				})
@@ -356,7 +348,7 @@ func (r *queryResolver) List(ctx context.Context, filter model.Filter) (*model.N
 	}
 	return &model.Nodes{
 		Cursor: r.createCursor(skip),
-		Values:  nodes,
+		Values: nodes,
 	}, nil
 }
 

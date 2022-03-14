@@ -24,14 +24,6 @@ type Expression struct {
 	Value    interface{} `json:"value"`
 }
 
-type Filter struct {
-	Cursor      *string       `json:"cursor"`
-	Type        string        `json:"type"`
-	Expressions []*Expression `json:"expressions"`
-	PageSize    *int          `json:"page_size"`
-	OrderBy     *OrderBy      `json:"order_by"`
-}
-
 type Key struct {
 	Type string `json:"type"`
 	ID   string `json:"id"`
@@ -52,6 +44,14 @@ type Node struct {
 
 func (Node) IsEntity() {}
 
+type NodeWhere struct {
+	Cursor      *string       `json:"cursor"`
+	Type        string        `json:"type"`
+	Expressions []*Expression `json:"expressions"`
+	PageSize    *int          `json:"page_size"`
+	OrderBy     *OrderBy      `json:"order_by"`
+}
+
 type Nodes struct {
 	Cursor string  `json:"cursor"`
 	Values []*Node `json:"values"`
@@ -60,6 +60,15 @@ type Nodes struct {
 type OrderBy struct {
 	Field   string `json:"field"`
 	Reverse *bool  `json:"reverse"`
+}
+
+type RelationWhere struct {
+	Cursor      *string       `json:"cursor"`
+	Relation    string        `json:"relation"`
+	TargetType  string        `json:"target_type"`
+	Expressions []*Expression `json:"expressions"`
+	PageSize    *int          `json:"page_size"`
+	OrderBy     *OrderBy      `json:"order_by"`
 }
 
 type Relationship struct {

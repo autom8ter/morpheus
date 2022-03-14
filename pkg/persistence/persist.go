@@ -1,94 +1,216 @@
 package persistence
 
 import (
-	"fmt"
 	"github.com/autom8ter/morpheus/pkg/api"
+	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/encode"
-	"github.com/autom8ter/morpheus/pkg/logger"
 	"github.com/dgraph-io/badger/v3"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/palantir/stacktrace"
+	"sort"
+	"strings"
 )
 
-func NewPersistantGraph(dir string, rcacheSize, wcacheSize int) (api.Graph, error) {
-	db, err := badger.Open(badger.DefaultOptions(dir))
+type DB struct {
+	dir               string
+	rcacheSize        int
+	rcache            *lru.Cache
+	db                *badger.DB
+	nodeTypes         map[string]struct{}
+	relationshipTypes map[string]struct{}
+}
+
+func New(dir string, rcacheSize int) (*DB, error) {
+	db, err := badger.Open(badger.DefaultOptions(dir).WithLogger(bLogger{}))
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.Propagate(err, "failed to create database storage")
 	}
+
 	rcache, err := lru.New(rcacheSize)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.Propagate(err, "failed to create cache")
 	}
-	return api.NewGraph(func(prefix, nodeType, nodeID string, properties map[string]interface{}) api.Entity {
-		compoundKey := getKey(prefix, nodeType, nodeID)
-		if properties == nil {
-			properties = map[string]interface{}{}
-		}
-		e := api.NewEntity(
-			nodeType,
-			nodeID,
-			get(db, rcache, compoundKey),
-			set(db, rcache, compoundKey),
-		)
-		e.SetProperties(properties)
-		return e
-	}, func() error {
-		return db.Close()
-	}), nil
+	return &DB{
+		dir:               dir,
+		rcacheSize:        rcacheSize,
+		rcache:            rcache,
+		db:                db,
+		nodeTypes:         map[string]struct{}{},
+		relationshipTypes: map[string]struct{}{},
+	}, nil
 }
 
-func set(db *badger.DB, cache *lru.Cache, compoundKey string) func(props map[string]interface{}) {
-	return func(props map[string]interface{}) {
-		if err := db.Update(func(txn *badger.Txn) error {
-			bits, err := encode.Marshal(props)
-			if err != nil {
-				return stacktrace.Propagate(err, "")
-			}
-			if err := txn.Set([]byte(compoundKey), bits); err != nil {
-				return stacktrace.Propagate(err, "failed to set key: %s", compoundKey)
-			}
-			return nil
-		}); err != nil {
-			logger.L.Error("failed to persist", map[string]interface{}{
-				"error": err,
-			})
-		}
-		if cache.Contains(compoundKey) {
-			cache.Add(compoundKey, props)
-		}
+func (d DB) GetNode(nodeType, nodeID string) (api.Node, error) {
+	n := &Node{
+		nodeType: nodeType,
+		nodeID:   nodeID,
+		db:       d.db,
 	}
-}
-
-func get(db *badger.DB, rcache *lru.Cache, compoundKey string) func() map[string]interface{} {
-	return func() map[string]interface{} {
-		if val, ok := rcache.Get(compoundKey); ok {
-			return val.(map[string]interface{})
+	key := getNodePath(nodeType, nodeID)
+	if err := d.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		if err != nil {
+			return stacktrace.Propagate(err, "")
 		}
-		data := map[string]interface{}{}
-
-		if err := db.View(func(txn *badger.Txn) error {
-			val, err := txn.Get([]byte(compoundKey))
-			if err != nil {
-				return stacktrace.Propagate(err, "failed to get key")
-			}
-			if err := val.Value(func(val []byte) error {
-				return encode.Unmarshal(val, &data)
-			}); err != nil {
-				return stacktrace.Propagate(err, "")
-			}
+		if err := item.Value(func(val []byte) error {
+			n.item = val
 			return nil
 		}); err != nil {
-			logger.L.Error("failed to get properties", map[string]interface{}{
-				"error": err,
-			})
-		} else {
-			rcache.Add(compoundKey, data)
-			return data
+			return stacktrace.Propagate(err, "")
 		}
 		return nil
+
+	}); err != nil {
+		return nil, err
 	}
+	if n.item == nil {
+		return nil, stacktrace.Propagate(constants.ErrNotFound, "")
+	}
+	return n, nil
 }
 
-func getKey(prefix, nodeType, nodeID string) string {
-	return fmt.Sprintf("%s_%s_%s", prefix, nodeType, nodeID)
+func (d DB) AddNode(nodeType, nodeID string, properties map[string]interface{}) (api.Node, error) {
+	key := getNodePath(nodeType, nodeID)
+	bits, err := encode.Marshal(properties)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
+	}
+	if err := d.db.Update(func(txn *badger.Txn) error {
+		return txn.Set(key, bits)
+	}); err != nil {
+		return nil, err
+	}
+	return &Node{
+		nodeType: nodeType,
+		nodeID:   nodeID,
+		db:       d.db,
+	}, nil
+}
+
+func (d DB) DelNode(nodeType, nodeID string) error {
+	key := getNodePath(nodeType, nodeID)
+	if err := d.db.Update(func(txn *badger.Txn) error {
+		return txn.Delete(key)
+	}); err != nil {
+		return stacktrace.Propagate(err, "")
+	}
+	return nil
+}
+
+func (d DB) RangeNodes(skip int, nodeType string, fn func(node api.Node) bool) error {
+	var skipped int
+	key := getNodePath(nodeType, "")
+	if err := d.db.View(func(txn *badger.Txn) error {
+		opt := badger.DefaultIteratorOptions
+		opt.PrefetchSize = 10
+		it := txn.NewIterator(opt)
+		defer it.Close()
+		for it.Rewind(); it.ValidForPrefix(key); it.Next() {
+			if skipped < skip {
+				skip++
+				continue
+			}
+			item := it.Item()
+			key := item.KeyCopy(nil)
+			split := strings.Split(string(key), ",")
+			if !fn(&Node{
+				nodeType: nodeType,
+				nodeID:   split[len(split)-1],
+				db:       d.db,
+			}) {
+				break
+			}
+		}
+		return nil
+	}); err != nil {
+		panic(err)
+	}
+	return nil
+}
+
+func (d DB) NodeTypes() []string {
+	var types []string
+	for t, _ := range d.nodeTypes {
+		types = append(types, t)
+	}
+	sort.Strings(types)
+	return types
+}
+
+func (d DB) GetRelationship(relation string, id string) (api.Relationship, error) {
+	r := &Relationship{
+		relationshipType: relation,
+		relationshipID:   id,
+		item:             nil,
+		db:               d.db,
+	}
+	key := getRelationshipPath(relation, id)
+	if err := d.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		if err != nil {
+			return stacktrace.Propagate(err, "")
+		}
+		if err := item.Value(func(val []byte) error {
+			r.item = val
+			return nil
+		}); err != nil {
+			return stacktrace.Propagate(err, "")
+		}
+		return nil
+
+	}); err != nil {
+		return nil, err
+	}
+	if r.item == nil {
+		return nil, stacktrace.Propagate(constants.ErrNotFound, "")
+	}
+	return r, nil
+}
+
+func (d DB) RangeRelationships(skip int, relation string, fn func(node api.Relationship) bool) error {
+	source := getRelationshipPath(relation, "")
+	// Iterate over 1000 items
+	var skipped int
+	if err := d.db.View(func(txn *badger.Txn) error {
+		opt := badger.DefaultIteratorOptions
+		opt.PrefetchSize = 10
+		it := txn.NewIterator(opt)
+		defer it.Close()
+		for it.Rewind(); it.ValidForPrefix(source); it.Next() {
+			if skipped < skip {
+				skip++
+				continue
+			}
+			item := it.Item()
+			split := strings.Split(string(item.Key()), ",")
+			if !fn(&Relationship{
+				relationshipType: relation,
+				relationshipID:   split[len(split)-1],
+				db:               d.db,
+			}) {
+				break
+			}
+		}
+		return nil
+	}); err != nil {
+		panic(err)
+	}
+	return nil
+}
+
+func (d DB) RelationshipTypes() []string {
+	var types []string
+	for t, _ := range d.relationshipTypes {
+		types = append(types, t)
+	}
+	sort.Strings(types)
+	return types
+}
+
+func (d DB) Size() int {
+	panic("implement me")
+}
+
+func (d DB) Close() error {
+	return d.db.Close()
 }

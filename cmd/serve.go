@@ -41,7 +41,7 @@ var serveCmd = &cobra.Command{
 				},
 			}}
 		}
-		g, err := persistence.NewPersistantGraph(fmt.Sprintf("%s/storage", cfg.Database.StoragePath), defaultCacheSize, 100)
+		g, err := persistence.New(fmt.Sprintf("%s/storage", cfg.Database.StoragePath), defaultCacheSize)
 		if err != nil {
 			panic(err)
 		}
@@ -57,4 +57,3 @@ var serveCmd = &cobra.Command{
 		}
 	},
 }
-

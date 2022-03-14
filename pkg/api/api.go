@@ -7,6 +7,15 @@ const (
 	Incoming Direction = "INCOMING"
 )
 
+func (d Direction) Opposite() Direction {
+	switch d {
+	case Outgoing:
+		return Incoming
+	default:
+		return Outgoing
+	}
+}
+
 type Entity interface {
 	ID() string
 	Type() string
@@ -20,10 +29,10 @@ type EntityCreationFunc func(prefix, nodeType, nodeID string, properties map[str
 
 type Node interface {
 	Entity
-	AddRelationship(direction Direction, relationship string, id string, node Node) Relationship
-	DelRelationship(direction Direction, relationship string, id string)
-	GetRelationship(direction Direction, relation, id string) (Relationship, bool)
-	Relationships(skip int, direction Direction, typee string, fn func(relationship Relationship) bool)
+	AddRelationship(relationship string, node Node) Relationship
+	DelRelationship(relationship string, id string)
+	GetRelationship(relation, id string) (Relationship, bool)
+	Relationships(skip int, relation string, targetType string, fn func(relationship Relationship) bool)
 }
 
 type Relationship interface {

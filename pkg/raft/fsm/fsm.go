@@ -71,13 +71,11 @@ type SetRelationshipProperty struct {
 }
 
 type AddRelationship struct {
-	NodeType       string
-	NodeID         string
-	Direction      string
-	Relationship   string
-	RelationshipID string
-	Node2Type      string
-	Node2ID        string
+	NodeType     string
+	NodeID       string
+	Relationship string
+	Node2Type    string
+	Node2ID      string
 }
 
 type DelRelationship struct {
@@ -168,7 +166,7 @@ func NewGraphFSM(g api.Graph) raft.FSM {
 					if err != nil {
 						return stacktrace.Propagate(err, "")
 					}
-					rels = append(rels, n.AddRelationship(api.Direction(relation.Direction), relation.Relationship, relation.RelationshipID, n2))
+					rels = append(rels, n.AddRelationship(relation.Relationship, n2))
 				}
 				return rels
 			case DelRelationships:
@@ -177,7 +175,7 @@ func NewGraphFSM(g api.Graph) raft.FSM {
 					if err != nil {
 						return stacktrace.Propagate(err, "")
 					}
-					n.DelRelationship(api.Direction(relation.Direction), relation.Relationship, relation.RelationshipID)
+					n.DelRelationship(relation.Relationship, relation.RelationshipID)
 				}
 				return nil
 			default:

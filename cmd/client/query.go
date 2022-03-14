@@ -12,7 +12,7 @@ import (
 )
 
 var RootCmd = &cobra.Command{
-	Use: "client",
+	Use:   "client",
 	Short: "client operations",
 }
 

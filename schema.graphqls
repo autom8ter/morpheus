@@ -1,118 +1,126 @@
-
 scalar Map
 
 scalar Any
 
 
 input Key {
-  type: String!
-  id: String!
+    type: String!
+    id: String!
 }
 
 enum Operator {
-  EQ
-  NEQ
-  GT
-  LT
-  GTE
-  LTE
-  CONTAINS
-  HAS_PREFIX
-  HAS_SUFFIX
+    EQ
+    NEQ
+    GT
+    LT
+    GTE
+    LTE
+    CONTAINS
+    HAS_PREFIX
+    HAS_SUFFIX
 }
 
 input Expression {
-  key: String!
-  operator: Operator!
-  value: Any!
+    key: String!
+    operator: Operator!
+    value: Any!
 }
 
-input Filter {
-  cursor: String
-  type: String!
-  expressions: [Expression!]
-  page_size: Int
-  order_by: OrderBy
+input NodeWhere {
+    cursor: String
+    type: String!
+    expressions: [Expression!]
+    page_size: Int
+    order_by: OrderBy
+}
+
+input RelationWhere {
+    cursor: String
+    relation: String!
+    target_type: String!
+    expressions: [Expression!]
+    page_size: Int
+    order_by: OrderBy
 }
 
 input OrderBy {
-  field: String!
-  reverse: Boolean
+    field: String!
+    reverse: Boolean
 }
 
 enum Direction {
-  OUTGOING
-  INCOMING
+    OUTGOING
+    INCOMING
 }
 
 interface Entity {
-  id: String!
-  type: String!
-  properties: Map!
-  getProperty(key: String!): Any
-  setProperties(properties: Map!): Boolean!
-  delProperty(key: String!): Boolean!
+    id: String!
+    type: String!
+    properties: Map!
+    getProperty(key: String!): Any
+    setProperties(properties: Map!): Boolean!
+    delProperty(key: String!): Boolean!
 }
 
 type Node implements Entity {
-  id: String!
-  type: String!
-  properties: Map!
-  getProperty(key: String!): Any
-  setProperties(properties: Map!): Boolean!
-  delProperty(key: String!): Boolean!
-  getRelationship(direction: Direction!, relationship: String!, id: String!): Relationship!
-  addRelationship(direction: Direction!, relationship: String!, nodeKey: Key!): Relationship!
-  delRelationship(direction: Direction!, key: Key!): Boolean!
-  relationships(direction: Direction!, filter: Filter): Relationships!
+    id: String!
+    type: String!
+    properties: Map!
+    getProperty(key: String!): Any
+    setProperties(properties: Map!): Boolean!
+    delProperty(key: String!): Boolean!
+    getRelationship(relationship: String!, id: String!): Relationship!
+    addRelationship(relationship: String!, nodeKey: Key!): Relationship!
+    delRelationship(key: Key!): Boolean!
+    relationships(where: RelationWhere!): Relationships!
 }
 
 type Relationship implements Entity {
-  id: String!
-  type: String!
-  properties: Map!
-  getProperty(key: String!): Any
-  setProperties(properties: Map!): Boolean!
-  delProperty(key: String!): Boolean!
-  source: Node!
-  target: Node!
+    id: String!
+    type: String!
+    properties: Map!
+    getProperty(key: String!): Any
+    setProperties(properties: Map!): Boolean!
+    delProperty(key: String!): Boolean!
+    source: Node!
+    target: Node!
 }
 
 type Relationships {
-  cursor: String!
-  values: [Relationship!]
+    cursor: String!
+    values: [Relationship!]
 }
 
 type Nodes {
-  cursor: String!
-  values: [Node!]
+    cursor: String!
+    values: [Node!]
 }
 
 input AddNode {
-  type: String!
-  id: String
-  properties: Map
+    type: String!
+    id: String
+    properties: Map
 }
 
 input SetNode {
-  type: String!
-  id: String!
-  properties: Map
+    type: String!
+    id: String!
+    properties: Map
 }
 
 type Query {
-  types: [String!]
-  get(key: Key!): Node!
-  list(filter: Filter!): Nodes!
-  size: Int!
+    types: [String!]
+    get(key: Key!): Node!
+    list(where: NodeWhere!): Nodes!
+    size: Int!
 
-  add(add: AddNode!): Node!
-  set(set: SetNode!): Node!
-  del(del: Key!): Boolean!
-  bulkAdd(add: [AddNode!]): Boolean!
-  bulkSet(set: [SetNode!]): Boolean!
-  bulkDel(del: [Key!]): Boolean!
+    add(add: AddNode!): Node!
+    set(set: SetNode!): Node!
+    del(del: Key!): Boolean!
+    bulkAdd(add: [AddNode!]): Boolean!
+    bulkSet(set: [SetNode!]): Boolean!
+    bulkDel(del: [Key!]): Boolean!
 
-  login(username: String!, password: String!): String!
+    login(username: String!, password: String!): String!
 }
 

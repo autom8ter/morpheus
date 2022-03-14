@@ -46,14 +46,14 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	Node struct {
-		AddRelationship func(childComplexity int, direction model.Direction, relationship string, nodeKey model.Key) int
+		AddRelationship func(childComplexity int, relationship string, nodeKey model.Key) int
 		DelProperty     func(childComplexity int, key string) int
-		DelRelationship func(childComplexity int, direction model.Direction, key model.Key) int
+		DelRelationship func(childComplexity int, key model.Key) int
 		GetProperty     func(childComplexity int, key string) int
-		GetRelationship func(childComplexity int, direction model.Direction, relationship string, id string) int
+		GetRelationship func(childComplexity int, relationship string, id string) int
 		ID              func(childComplexity int) int
 		Properties      func(childComplexity int) int
-		Relationships   func(childComplexity int, direction model.Direction, filter *model.Filter) int
+		Relationships   func(childComplexity int, where model.RelationWhere) int
 		SetProperties   func(childComplexity int, properties map[string]interface{}) int
 		Type            func(childComplexity int) int
 	}
@@ -70,7 +70,7 @@ type ComplexityRoot struct {
 		BulkSet func(childComplexity int, set []*model.SetNode) int
 		Del     func(childComplexity int, del model.Key) int
 		Get     func(childComplexity int, key model.Key) int
-		List    func(childComplexity int, filter model.Filter) int
+		List    func(childComplexity int, where model.NodeWhere) int
 		Login   func(childComplexity int, username string, password string) int
 		Set     func(childComplexity int, set model.SetNode) int
 		Size    func(childComplexity int) int
@@ -99,15 +99,15 @@ type NodeResolver interface {
 	GetProperty(ctx context.Context, obj *model.Node, key string) (interface{}, error)
 	SetProperties(ctx context.Context, obj *model.Node, properties map[string]interface{}) (bool, error)
 
-	GetRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, id string) (*model.Relationship, error)
-	AddRelationship(ctx context.Context, obj *model.Node, direction model.Direction, relationship string, nodeKey model.Key) (*model.Relationship, error)
-	DelRelationship(ctx context.Context, obj *model.Node, direction model.Direction, key model.Key) (bool, error)
-	Relationships(ctx context.Context, obj *model.Node, direction model.Direction, filter *model.Filter) (*model.Relationships, error)
+	GetRelationship(ctx context.Context, obj *model.Node, relationship string, id string) (*model.Relationship, error)
+	AddRelationship(ctx context.Context, obj *model.Node, relationship string, nodeKey model.Key) (*model.Relationship, error)
+	DelRelationship(ctx context.Context, obj *model.Node, key model.Key) (bool, error)
+	Relationships(ctx context.Context, obj *model.Node, where model.RelationWhere) (*model.Relationships, error)
 }
 type QueryResolver interface {
 	Types(ctx context.Context) ([]string, error)
 	Get(ctx context.Context, key model.Key) (*model.Node, error)
-	List(ctx context.Context, filter model.Filter) (*model.Nodes, error)
+	List(ctx context.Context, where model.NodeWhere) (*model.Nodes, error)
 	Size(ctx context.Context) (int, error)
 	Add(ctx context.Context, add model.AddNode) (*model.Node, error)
 	Set(ctx context.Context, set model.SetNode) (*model.Node, error)
@@ -148,7 +148,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Node.AddRelationship(childComplexity, args["direction"].(model.Direction), args["relationship"].(string), args["nodeKey"].(model.Key)), true
+		return e.complexity.Node.AddRelationship(childComplexity, args["relationship"].(string), args["nodeKey"].(model.Key)), true
 
 	case "Node.delProperty":
 		if e.complexity.Node.DelProperty == nil {
@@ -172,7 +172,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Node.DelRelationship(childComplexity, args["direction"].(model.Direction), args["key"].(model.Key)), true
+		return e.complexity.Node.DelRelationship(childComplexity, args["key"].(model.Key)), true
 
 	case "Node.getProperty":
 		if e.complexity.Node.GetProperty == nil {
@@ -196,7 +196,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Node.GetRelationship(childComplexity, args["direction"].(model.Direction), args["relationship"].(string), args["id"].(string)), true
+		return e.complexity.Node.GetRelationship(childComplexity, args["relationship"].(string), args["id"].(string)), true
 
 	case "Node.id":
 		if e.complexity.Node.ID == nil {
@@ -222,7 +222,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Node.Relationships(childComplexity, args["direction"].(model.Direction), args["filter"].(*model.Filter)), true
+		return e.complexity.Node.Relationships(childComplexity, args["where"].(model.RelationWhere)), true
 
 	case "Node.setProperties":
 		if e.complexity.Node.SetProperties == nil {
@@ -339,7 +339,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.List(childComplexity, args["filter"].(model.Filter)), true
+		return e.complexity.Query.List(childComplexity, args["where"].(model.NodeWhere)), true
 
 	case "Query.login":
 		if e.complexity.Query.Login == nil {
@@ -514,122 +514,130 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 }
 
 var sources = []*ast.Source{
-	{Name: "schema.graphqls", Input: `
-scalar Map
+	{Name: "schema.graphqls", Input: `scalar Map
 
 scalar Any
 
 
 input Key {
-  type: String!
-  id: String!
+    type: String!
+    id: String!
 }
 
 enum Operator {
-  EQ
-  NEQ
-  GT
-  LT
-  GTE
-  LTE
-  CONTAINS
-  HAS_PREFIX
-  HAS_SUFFIX
+    EQ
+    NEQ
+    GT
+    LT
+    GTE
+    LTE
+    CONTAINS
+    HAS_PREFIX
+    HAS_SUFFIX
 }
 
 input Expression {
-  key: String!
-  operator: Operator!
-  value: Any!
+    key: String!
+    operator: Operator!
+    value: Any!
 }
 
-input Filter {
-  cursor: String
-  type: String!
-  expressions: [Expression!]
-  page_size: Int
-  order_by: OrderBy
+input NodeWhere {
+    cursor: String
+    type: String!
+    expressions: [Expression!]
+    page_size: Int
+    order_by: OrderBy
+}
+
+input RelationWhere {
+    cursor: String
+    relation: String!
+    target_type: String!
+    expressions: [Expression!]
+    page_size: Int
+    order_by: OrderBy
 }
 
 input OrderBy {
-  field: String!
-  reverse: Boolean
+    field: String!
+    reverse: Boolean
 }
 
 enum Direction {
-  OUTGOING
-  INCOMING
+    OUTGOING
+    INCOMING
 }
 
 interface Entity {
-  id: String!
-  type: String!
-  properties: Map!
-  getProperty(key: String!): Any
-  setProperties(properties: Map!): Boolean!
-  delProperty(key: String!): Boolean!
+    id: String!
+    type: String!
+    properties: Map!
+    getProperty(key: String!): Any
+    setProperties(properties: Map!): Boolean!
+    delProperty(key: String!): Boolean!
 }
 
 type Node implements Entity {
-  id: String!
-  type: String!
-  properties: Map!
-  getProperty(key: String!): Any
-  setProperties(properties: Map!): Boolean!
-  delProperty(key: String!): Boolean!
-  getRelationship(direction: Direction!, relationship: String!, id: String!): Relationship!
-  addRelationship(direction: Direction!, relationship: String!, nodeKey: Key!): Relationship!
-  delRelationship(direction: Direction!, key: Key!): Boolean!
-  relationships(direction: Direction!, filter: Filter): Relationships!
+    id: String!
+    type: String!
+    properties: Map!
+    getProperty(key: String!): Any
+    setProperties(properties: Map!): Boolean!
+    delProperty(key: String!): Boolean!
+    getRelationship(relationship: String!, id: String!): Relationship!
+    addRelationship(relationship: String!, nodeKey: Key!): Relationship!
+    delRelationship(key: Key!): Boolean!
+    relationships(where: RelationWhere!): Relationships!
 }
 
 type Relationship implements Entity {
-  id: String!
-  type: String!
-  properties: Map!
-  getProperty(key: String!): Any
-  setProperties(properties: Map!): Boolean!
-  delProperty(key: String!): Boolean!
-  source: Node!
-  target: Node!
+    id: String!
+    type: String!
+    properties: Map!
+    getProperty(key: String!): Any
+    setProperties(properties: Map!): Boolean!
+    delProperty(key: String!): Boolean!
+    source: Node!
+    target: Node!
 }
 
 type Relationships {
-  cursor: String!
-  values: [Relationship!]
+    cursor: String!
+    values: [Relationship!]
 }
 
 type Nodes {
-  cursor: String!
-  values: [Node!]
+    cursor: String!
+    values: [Node!]
 }
 
 input AddNode {
-  type: String!
-  id: String
-  properties: Map
+    type: String!
+    id: String
+    properties: Map
 }
 
 input SetNode {
-  type: String!
-  id: String!
-  properties: Map
+    type: String!
+    id: String!
+    properties: Map
 }
 
 type Query {
-  types: [String!]
-  get(key: Key!): Node!
-  list(filter: Filter!): Nodes!
-  size: Int!
+    types: [String!]
+    get(key: Key!): Node!
+    list(where: NodeWhere!): Nodes!
+    size: Int!
 
-  add(add: AddNode!): Node!
-  set(set: SetNode!): Node!
-  del(del: Key!): Boolean!
-  bulkAdd(add: [AddNode!]): Boolean!
-  bulkSet(set: [SetNode!]): Boolean!
-  bulkDel(del: [Key!]): Boolean!
+    add(add: AddNode!): Node!
+    set(set: SetNode!): Node!
+    del(del: Key!): Boolean!
+    bulkAdd(add: [AddNode!]): Boolean!
+    bulkSet(set: [SetNode!]): Boolean!
+    bulkDel(del: [Key!]): Boolean!
 
-  login(username: String!, password: String!): String!
+    login(username: String!, password: String!): String!
 }
 
 `, BuiltIn: false},
@@ -643,33 +651,24 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 func (ec *executionContext) field_Node_addRelationship_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 model.Direction
-	if tmp, ok := rawArgs["direction"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
-		arg0, err = ec.unmarshalNDirection2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["direction"] = arg0
-	var arg1 string
+	var arg0 string
 	if tmp, ok := rawArgs["relationship"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relationship"))
-		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["relationship"] = arg1
-	var arg2 model.Key
+	args["relationship"] = arg0
+	var arg1 model.Key
 	if tmp, ok := rawArgs["nodeKey"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("nodeKey"))
-		arg2, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
+		arg1, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["nodeKey"] = arg2
+	args["nodeKey"] = arg1
 	return args, nil
 }
 
@@ -691,24 +690,15 @@ func (ec *executionContext) field_Node_delProperty_args(ctx context.Context, raw
 func (ec *executionContext) field_Node_delRelationship_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 model.Direction
-	if tmp, ok := rawArgs["direction"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
-		arg0, err = ec.unmarshalNDirection2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["direction"] = arg0
-	var arg1 model.Key
+	var arg0 model.Key
 	if tmp, ok := rawArgs["key"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
-		arg1, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
+		arg0, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["key"] = arg1
+	args["key"] = arg0
 	return args, nil
 }
 
@@ -730,57 +720,39 @@ func (ec *executionContext) field_Node_getProperty_args(ctx context.Context, raw
 func (ec *executionContext) field_Node_getRelationship_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 model.Direction
-	if tmp, ok := rawArgs["direction"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
-		arg0, err = ec.unmarshalNDirection2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx, tmp)
+	var arg0 string
+	if tmp, ok := rawArgs["relationship"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relationship"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["direction"] = arg0
+	args["relationship"] = arg0
 	var arg1 string
-	if tmp, ok := rawArgs["relationship"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relationship"))
+	if tmp, ok := rawArgs["id"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
 		arg1, err = ec.unmarshalNString2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["relationship"] = arg1
-	var arg2 string
-	if tmp, ok := rawArgs["id"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
-		arg2, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["id"] = arg2
+	args["id"] = arg1
 	return args, nil
 }
 
 func (ec *executionContext) field_Node_relationships_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 model.Direction
-	if tmp, ok := rawArgs["direction"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
-		arg0, err = ec.unmarshalNDirection2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx, tmp)
+	var arg0 model.RelationWhere
+	if tmp, ok := rawArgs["where"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("where"))
+		arg0, err = ec.unmarshalNRelationWhere2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationWhere(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["direction"] = arg0
-	var arg1 *model.Filter
-	if tmp, ok := rawArgs["filter"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
-		arg1, err = ec.unmarshalOFilter2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐFilter(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["filter"] = arg1
+	args["where"] = arg0
 	return args, nil
 }
 
@@ -907,15 +879,15 @@ func (ec *executionContext) field_Query_get_args(ctx context.Context, rawArgs ma
 func (ec *executionContext) field_Query_list_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 model.Filter
-	if tmp, ok := rawArgs["filter"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
-		arg0, err = ec.unmarshalNFilter2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐFilter(ctx, tmp)
+	var arg0 model.NodeWhere
+	if tmp, ok := rawArgs["where"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("where"))
+		arg0, err = ec.unmarshalNNodeWhere2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodeWhere(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["filter"] = arg0
+	args["where"] = arg0
 	return args, nil
 }
 
@@ -1294,7 +1266,7 @@ func (ec *executionContext) _Node_getRelationship(ctx context.Context, field gra
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Node().GetRelationship(rctx, obj, args["direction"].(model.Direction), args["relationship"].(string), args["id"].(string))
+		return ec.resolvers.Node().GetRelationship(rctx, obj, args["relationship"].(string), args["id"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1336,7 +1308,7 @@ func (ec *executionContext) _Node_addRelationship(ctx context.Context, field gra
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Node().AddRelationship(rctx, obj, args["direction"].(model.Direction), args["relationship"].(string), args["nodeKey"].(model.Key))
+		return ec.resolvers.Node().AddRelationship(rctx, obj, args["relationship"].(string), args["nodeKey"].(model.Key))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1378,7 +1350,7 @@ func (ec *executionContext) _Node_delRelationship(ctx context.Context, field gra
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Node().DelRelationship(rctx, obj, args["direction"].(model.Direction), args["key"].(model.Key))
+		return ec.resolvers.Node().DelRelationship(rctx, obj, args["key"].(model.Key))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1420,7 +1392,7 @@ func (ec *executionContext) _Node_relationships(ctx context.Context, field graph
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Node().Relationships(rctx, obj, args["direction"].(model.Direction), args["filter"].(*model.Filter))
+		return ec.resolvers.Node().Relationships(rctx, obj, args["where"].(model.RelationWhere))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1603,7 +1575,7 @@ func (ec *executionContext) _Query_list(ctx context.Context, field graphql.Colle
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().List(rctx, args["filter"].(model.Filter))
+		return ec.resolvers.Query().List(rctx, args["where"].(model.NodeWhere))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3649,8 +3621,39 @@ func (ec *executionContext) unmarshalInputExpression(ctx context.Context, obj in
 	return it, nil
 }
 
-func (ec *executionContext) unmarshalInputFilter(ctx context.Context, obj interface{}) (model.Filter, error) {
-	var it model.Filter
+func (ec *executionContext) unmarshalInputKey(ctx context.Context, obj interface{}) (model.Key, error) {
+	var it model.Key
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	for k, v := range asMap {
+		switch k {
+		case "type":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
+			it.Type, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "id":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+			it.ID, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputNodeWhere(ctx context.Context, obj interface{}) (model.NodeWhere, error) {
+	var it model.NodeWhere
 	asMap := map[string]interface{}{}
 	for k, v := range obj.(map[string]interface{}) {
 		asMap[k] = v
@@ -3704,37 +3707,6 @@ func (ec *executionContext) unmarshalInputFilter(ctx context.Context, obj interf
 	return it, nil
 }
 
-func (ec *executionContext) unmarshalInputKey(ctx context.Context, obj interface{}) (model.Key, error) {
-	var it model.Key
-	asMap := map[string]interface{}{}
-	for k, v := range obj.(map[string]interface{}) {
-		asMap[k] = v
-	}
-
-	for k, v := range asMap {
-		switch k {
-		case "type":
-			var err error
-
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
-			it.Type, err = ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-		case "id":
-			var err error
-
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
-			it.ID, err = ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-		}
-	}
-
-	return it, nil
-}
-
 func (ec *executionContext) unmarshalInputOrderBy(ctx context.Context, obj interface{}) (model.OrderBy, error) {
 	var it model.OrderBy
 	asMap := map[string]interface{}{}
@@ -3757,6 +3729,69 @@ func (ec *executionContext) unmarshalInputOrderBy(ctx context.Context, obj inter
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reverse"))
 			it.Reverse, err = ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputRelationWhere(ctx context.Context, obj interface{}) (model.RelationWhere, error) {
+	var it model.RelationWhere
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	for k, v := range asMap {
+		switch k {
+		case "cursor":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cursor"))
+			it.Cursor, err = ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "relation":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relation"))
+			it.Relation, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "target_type":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("target_type"))
+			it.TargetType, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "expressions":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expressions"))
+			it.Expressions, err = ec.unmarshalOExpression2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐExpressionᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "page_size":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("page_size"))
+			it.PageSize, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "order_by":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("order_by"))
+			it.OrderBy, err = ec.unmarshalOOrderBy2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐOrderBy(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -4991,24 +5026,9 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) unmarshalNDirection2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx context.Context, v interface{}) (model.Direction, error) {
-	var res model.Direction
-	err := res.UnmarshalGQL(v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNDirection2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx context.Context, sel ast.SelectionSet, v model.Direction) graphql.Marshaler {
-	return v
-}
-
 func (ec *executionContext) unmarshalNExpression2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐExpression(ctx context.Context, v interface{}) (*model.Expression, error) {
 	res, err := ec.unmarshalInputExpression(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) unmarshalNFilter2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐFilter(ctx context.Context, v interface{}) (model.Filter, error) {
-	res, err := ec.unmarshalInputFilter(ctx, v)
-	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v interface{}) (int, error) {
@@ -5071,6 +5091,11 @@ func (ec *executionContext) marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheus�
 	return ec._Node(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNNodeWhere2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodeWhere(ctx context.Context, v interface{}) (model.NodeWhere, error) {
+	res, err := ec.unmarshalInputNodeWhere(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNNodes2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodes(ctx context.Context, sel ast.SelectionSet, v model.Nodes) graphql.Marshaler {
 	return ec._Nodes(ctx, sel, &v)
 }
@@ -5093,6 +5118,11 @@ func (ec *executionContext) unmarshalNOperator2githubᚗcomᚋautom8terᚋmorphe
 
 func (ec *executionContext) marshalNOperator2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐOperator(ctx context.Context, sel ast.SelectionSet, v model.Operator) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) unmarshalNRelationWhere2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationWhere(ctx context.Context, v interface{}) (model.RelationWhere, error) {
+	res, err := ec.unmarshalInputRelationWhere(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalNRelationship2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationship(ctx context.Context, sel ast.SelectionSet, v model.Relationship) graphql.Marshaler {
@@ -5481,14 +5511,6 @@ func (ec *executionContext) unmarshalOExpression2ᚕᚖgithubᚗcomᚋautom8ter�
 		}
 	}
 	return res, nil
-}
-
-func (ec *executionContext) unmarshalOFilter2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐFilter(ctx context.Context, v interface{}) (*model.Filter, error) {
-	if v == nil {
-		return nil, nil
-	}
-	res, err := ec.unmarshalInputFilter(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v interface{}) (*int, error) {
