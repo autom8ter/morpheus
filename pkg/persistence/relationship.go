@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"fmt"
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/encode"
@@ -26,27 +27,28 @@ func (n *Relationship) ID() string {
 
 func (n *Relationship) Properties() (map[string]interface{}, error) {
 	data := map[string]interface{}{}
-	if n.item != nil {
-		if err := encode.Unmarshal(n.item, &data); err != nil {
-			return nil, stacktrace.Propagate(err, "")
-		}
-		n.item = nil
-		return data, nil
-	}
+	//if len(n.item) > 0 {
+	//	if err := encode.Unmarshal(n.item, &data); err != nil {
+	//		return nil, stacktrace.Propagate(err, "failed to get relationship properties")
+	//	}
+	//	n.item = nil
+	//	return data, nil
+	//}
 	if err := n.db.db.View(func(txn *badger.Txn) error {
 		var key = getRelationshipPath(n.relationshipType, n.relationshipID)
 		item, err := txn.Get(key)
 		if err != nil {
-			return stacktrace.Propagate(err, "")
+			return stacktrace.Propagate(err, "failed to get relationship properties")
 		}
 		if err := item.Value(func(val []byte) error {
+			n.item = val
 			return encode.Unmarshal(val, &data)
 		}); err != nil {
-			return stacktrace.Propagate(err, "")
+			return stacktrace.Propagate(err, "failed to get relationship properties")
 		}
 		return nil
 	}); err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.Propagate(err, "failed to get relationship properties")
 	}
 	return data, nil
 }
@@ -110,7 +112,7 @@ func (r Relationship) Relation() (string, error) {
 func (r Relationship) Source() (api.Node, error) {
 	all, err := r.Properties()
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.Propagate(err, fmt.Sprintf("%s %s", all[SourceType], all[SourceID]))
 	}
 	return &Node{
 		nodeType: cast.ToString(all[SourceType]),
@@ -122,7 +124,7 @@ func (r Relationship) Source() (api.Node, error) {
 func (r Relationship) Target() (api.Node, error) {
 	all, err := r.Properties()
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, stacktrace.Propagate(err, fmt.Sprintf("%s %s", r.Type(), r.ID()))
 	}
 	return &Node{
 		nodeType: cast.ToString(all[TargetType]),

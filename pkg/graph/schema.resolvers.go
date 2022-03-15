@@ -198,6 +198,8 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where
 		if err != nil {
 			logger.L.Error("graphql resolver error", map[string]interface{}{
 				"error": stacktrace.Propagate(err, ""),
+				"relation_type": rel.Type(),
+				"relation_id": rel.ID(),
 			})
 			return nil, stacktrace.RootCause(err)
 		}

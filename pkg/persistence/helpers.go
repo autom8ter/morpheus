@@ -38,12 +38,24 @@ const (
 )
 
 func getNodePath(typee, id string) []byte {
-	key := append([]string{string(nodesPrefix)}, typee, id)
+	key := append([]string{string(nodesPrefix)})
+	if typee != "" {
+		key = append(key, typee)
+	}
+	if id != "" {
+		key = append(key, id)
+	}
 	return []byte(strings.Join(key, ","))
 }
 
 func getNodeRelationshipPath(sourceType, sourceID string, direction api.Direction, relation, targetType, targetID, relationID string) []byte {
-	key := append([]string{string(nodeRelationPrefix)}, sourceType, sourceID, string(direction), relation, targetType, targetID, relationID)
+	key := append([]string{string(nodeRelationPrefix)}, sourceType, sourceID, string(direction), relation, targetType)
+	if targetID != "" {
+		key = append(key, targetID)
+	}
+	if relationID != "" {
+		key = append(key, relationID)
+	}
 	return []byte(strings.Join(key, ","))
 }
 
@@ -53,11 +65,6 @@ func getRelationID(sourceType, sourceID string, relation, targetType, targetID s
 	s.Write([]byte(strings.Join(key, ",")))
 	id := s.Sum(nil)
 	return hex.EncodeToString(id)
-}
-
-func getNodeRelationshipPrefix(sourceType, sourceID string, direction api.Direction, relation, targetType string) []byte {
-	key := append([]string{string(nodeRelationPrefix)}, sourceType, sourceID, string(direction), relation, targetType)
-	return []byte(strings.Join(key, ","))
 }
 
 func getRelationshipPath(relation, id string) []byte {

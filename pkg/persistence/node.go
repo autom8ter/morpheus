@@ -92,17 +92,18 @@ func (n Node) AddRelationship(relationship string, node api.Node) (api.Relations
 	source := getNodeRelationshipPath(n.Type(), n.ID(), api.Outgoing, relationship, node.Type(), node.ID(), relID)
 	target := getNodeRelationshipPath(node.Type(), node.ID(), api.Incoming, relationship, n.Type(), n.ID(), relID)
 
-	values := map[string]interface{}{}
-	values[Direction] = api.Outgoing
-	values[SourceType] = n.Type()
-	values[SourceID] = n.ID()
-	values[TargetID] = node.ID()
-	values[TargetType] = node.Type()
-	values[ID] = relID
-	values[Relation] = relationship
-	values[Type] = relationship
+	values := map[string]interface{}{
+		Direction:  api.Outgoing,
+		SourceType: n.Type(),
+		SourceID:   n.ID(),
+		TargetID:   node.ID(),
+		TargetType: node.Type(),
+		ID:         relID,
+		Relation:   relationship,
+		Type:       relationship,
+	}
 
-	bits, err := encode.Marshal(values)
+	bits, err := encode.Marshal(&values)
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}
@@ -116,13 +117,13 @@ func (n Node) AddRelationship(relationship string, node api.Node) (api.Relations
 		if err := txn.Set(target, bits); err != nil {
 			return stacktrace.Propagate(err, "")
 		}
-		for k, v := range values {
-			n.db.relationshipFieldMap.Store(strings.Join([]string{relationship, k}, ","), struct{}{})
-			key := getRelationshipFieldPath(relationship, k, v, relID)
-			if err := txn.Set(key, bits); err != nil {
-				return stacktrace.Propagate(err, "")
-			}
-		}
+		//for k, v := range values {
+		//	n.db.relationshipFieldMap.Store(strings.Join([]string{relationship, k}, ","), struct{}{})
+		//	key := getRelationshipFieldPath(relationship, k, v, relID)
+		//	if err := txn.Set(key, bits); err != nil {
+		//		return stacktrace.Propagate(err, "")
+		//	}
+		//}
 		return nil
 	}); err != nil {
 		return nil, stacktrace.Propagate(err, "")
@@ -213,7 +214,7 @@ func (n Node) GetRelationship(relation, id string) (api.Relationship, bool, erro
 }
 
 func (n Node) Relationships(where *model.RelationWhere) (string, []api.Relationship, error) {
-	source := getNodeRelationshipPrefix(n.Type(), n.ID(), api.Outgoing, where.Relation, where.TargetType)
+	source := getNodeRelationshipPath(n.Type(), n.ID(), api.Direction(where.Direction), where.Relation, where.TargetType, "", "")
 	// Iterate over 1000 items
 	var (
 		skipped int

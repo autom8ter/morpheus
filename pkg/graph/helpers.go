@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/graph/model"
+	"github.com/palantir/stacktrace"
 	"strconv"
 	"strings"
 )
@@ -24,11 +25,11 @@ func toNode(n api.Node) *model.Node {
 func toRelationship(rel api.Relationship) (*model.Relationship, error) {
 	source, err := rel.Source()
 	if err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "failed to load source")
 	}
 	target, err := rel.Target()
 	if err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "failed to load target")
 	}
 	return &model.Relationship{
 		ID:     rel.ID(),
