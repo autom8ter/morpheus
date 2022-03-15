@@ -10,12 +10,14 @@ import (
 )
 
 func toNode(n api.Node) *model.Node {
+	props, _ := n.Properties()
 	if n == nil {
 		return &model.Node{}
 	}
 	return &model.Node{
-		ID:   n.ID(),
-		Type: n.Type(),
+		ID:         n.ID(),
+		Type:       n.Type(),
+		Properties: props,
 	}
 }
 

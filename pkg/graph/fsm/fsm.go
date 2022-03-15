@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"github.com/autom8ter/morpheus/pkg/encode"
+	"github.com/autom8ter/morpheus/pkg/graph/model"
 	"github.com/hashicorp/raft"
 	"github.com/palantir/stacktrace"
 	"io"
@@ -56,10 +57,16 @@ const (
 )
 
 type CMD struct {
-	Method    Method            `json:"method"`
-	Value     interface{}       `json:"values"`
-	Timestamp time.Time         `json:"timestamp"`
-	Metadata  map[string]string `json:"metadata"`
+	Method       Method `json:"method"`
+	Node         model.Node
+	Relationship model.Relationship
+	AddNodes     []*model.AddNode
+	SetNodes     []*model.SetNode
+	Key          model.Key
+	Keys         []*model.Key
+	Properties   map[string]interface{}
+	Timestamp    time.Time         `json:"timestamp"`
+	Metadata     map[string]string `json:"metadata"`
 }
 
 type CMDHandlerFunc func(c CMD) ([]interface{}, error)

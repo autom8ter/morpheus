@@ -51,7 +51,6 @@ func (n Node) Properties() (map[string]interface{}, error) {
 	}); err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}
-
 	return data, nil
 }
 

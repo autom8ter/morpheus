@@ -77,6 +77,7 @@ func (d *DB) AddNode(nodeType, nodeID string, properties map[string]interface{})
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}
+
 	if err := d.db.Update(func(txn *badger.Txn) error {
 		if err := txn.Set(key, bits); err != nil {
 			return stacktrace.Propagate(err, "")

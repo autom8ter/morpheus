@@ -1,9 +1,10 @@
 package persistence
 
 import (
+	"fmt"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/autom8ter/morpheus/pkg/graph/fsm"
-	"github.com/autom8ter/morpheus/pkg/graph/model"
+	"github.com/autom8ter/morpheus/pkg/logger"
 	"github.com/hashicorp/raft"
 	"github.com/palantir/stacktrace"
 	"io"
@@ -18,28 +19,29 @@ func (d *DB) FSM() raft.FSM {
 			}
 			switch cmd.Method {
 			case fsm.MethodAdd:
-				addNode := cmd.Value.(model.AddNode)
-				n, err := d.AddNode(addNode.Type, *addNode.ID, addNode.Properties)
+				addNode := cmd.Node
+				logger.L.Info(fmt.Sprintf("%s/%s", addNode.Type, addNode.ID), addNode.Properties)
+				n, err := d.AddNode(addNode.Type, addNode.ID, addNode.Properties)
 				if err != nil {
 					return stacktrace.Propagate(err, "")
 				}
 				return n
 			case fsm.MethodSet:
-				addNode := cmd.Value.(model.SetNode)
+				addNode := cmd.Node
 				n, err := d.AddNode(addNode.Type, addNode.ID, addNode.Properties)
 				if err != nil {
 					return stacktrace.Propagate(err, "")
 				}
 				return n
 			case fsm.MethodDel:
-				key := cmd.Value.(model.Key)
+				key := cmd.Key
 				err := d.DelNode(key.Type, key.ID)
 				if err != nil {
 					return stacktrace.Propagate(err, "")
 				}
 				return true
 			case fsm.MethodBulkDel:
-				keys := cmd.Value.([]*model.Key)
+				keys := cmd.Keys
 				for _, key := range keys {
 					err := d.DelNode(key.Type, key.ID)
 					if err != nil {
@@ -48,7 +50,7 @@ func (d *DB) FSM() raft.FSM {
 				}
 				return true
 			case fsm.MethodBulkSet:
-				sets := cmd.Value.([]*model.SetNode)
+				sets := cmd.SetNodes
 				for _, set := range sets {
 					_, err := d.AddNode(set.Type, set.ID, set.Properties)
 					if err != nil {
@@ -57,7 +59,7 @@ func (d *DB) FSM() raft.FSM {
 				}
 				return true
 			case fsm.MethodBulkAdd:
-				adds := cmd.Value.([]*model.AddNode)
+				adds := cmd.AddNodes
 				for _, add := range adds {
 					_, err := d.AddNode(add.Type, *add.ID, add.Properties)
 					if err != nil {
@@ -66,7 +68,7 @@ func (d *DB) FSM() raft.FSM {
 				}
 				return true
 			case fsm.MethodNodeSetProperties:
-				props := cmd.Value.(map[string]interface{})
+				props := cmd.Properties
 				n, err := d.GetNode(cmd.Metadata["type"], cmd.Metadata["id"])
 				if err != nil {
 					return stacktrace.Propagate(err, "")
@@ -76,7 +78,7 @@ func (d *DB) FSM() raft.FSM {
 				}
 				return n
 			case fsm.MethodNodeAddRelation:
-				key := cmd.Value.(model.Key)
+				key := cmd.Key
 				source, err := d.GetNode(cmd.Metadata["type"], cmd.Metadata["id"])
 				if err != nil {
 					return stacktrace.Propagate(err, "")
@@ -91,7 +93,7 @@ func (d *DB) FSM() raft.FSM {
 				}
 				return rel
 			case fsm.MethodNodeDelRelation:
-				key := cmd.Value.(model.Key)
+				key := cmd.Key
 				source, err := d.GetNode(cmd.Metadata["type"], cmd.Metadata["id"])
 				if err != nil {
 					return stacktrace.Propagate(err, "")
@@ -102,7 +104,7 @@ func (d *DB) FSM() raft.FSM {
 				}
 				return true
 			case fsm.MethodRelationSetProperties:
-				props := cmd.Value.(map[string]interface{})
+				props := cmd.Properties
 				rel, err := d.GetRelationship(cmd.Metadata["type"], cmd.Metadata["id"])
 				if err != nil {
 					return stacktrace.Propagate(err, "")

@@ -10,7 +10,6 @@ import (
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/config"
 	"github.com/autom8ter/morpheus/pkg/constants"
-	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/autom8ter/morpheus/pkg/graph/fsm"
 	"github.com/autom8ter/morpheus/pkg/graph/generated"
 	"github.com/autom8ter/morpheus/pkg/graph/model"
@@ -64,9 +63,9 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
-		Method:    fsm.MethodNodeSetProperties,
-		Value:     properties,
-		Timestamp: time.Now(),
+		Method:     fsm.MethodNodeSetProperties,
+		Properties: properties,
+		Timestamp:  time.Now(),
 		Metadata: map[string]string{
 			"id":   obj.ID,
 			"type": obj.Type,
@@ -113,7 +112,7 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, rel
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method:    fsm.MethodNodeAddRelation,
-		Value:     nodeKey,
+		Key:       nodeKey,
 		Timestamp: time.Now(),
 		Metadata: map[string]string{
 			"type":         obj.Type,
@@ -121,15 +120,8 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, rel
 			"relationship": relationship,
 		},
 	}
-	bits, err := encode.Marshal(cmd)
+	val, err := r.applyCMD(cmd)
 	if err != nil {
-		return nil, stacktrace.RootCause(err)
-	}
-	val, err := r.raft.Apply(bits)
-	if err != nil {
-		return nil, stacktrace.RootCause(err)
-	}
-	if err, ok := val.(error); ok {
 		return nil, stacktrace.RootCause(err)
 	}
 	rel, err := toRelationship(val.(api.Relationship))
@@ -148,7 +140,7 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, key
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method:    fsm.MethodNodeDelRelation,
-		Value:     key,
+		Key:       key,
 		Timestamp: time.Now(),
 		Metadata: map[string]string{
 			"id":   obj.Type,
@@ -259,8 +251,12 @@ func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node
 	defer r.mu.Unlock()
 
 	cmd := &fsm.CMD{
-		Method:    fsm.MethodAdd,
-		Value:     a,
+		Method: fsm.MethodAdd,
+		Node: model.Node{
+			ID:         *a.ID,
+			Type:       a.Type,
+			Properties: a.Properties,
+		},
 		Timestamp: time.Now(),
 		Metadata:  nil,
 	}
@@ -279,8 +275,12 @@ func (r *queryResolver) Set(ctx context.Context, set model.SetNode) (*model.Node
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
-		Method:    fsm.MethodSet,
-		Value:     &set,
+		Method: fsm.MethodSet,
+		Node: model.Node{
+			ID:         set.ID,
+			Type:       set.Type,
+			Properties: set.Properties,
+		},
 		Timestamp: time.Now(),
 	}
 	result, err := r.applyCMD(cmd)
@@ -299,7 +299,7 @@ func (r *queryResolver) Del(ctx context.Context, del model.Key) (bool, error) {
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method:    fsm.MethodDel,
-		Value:     &del,
+		Key:       del,
 		Timestamp: time.Now(),
 	}
 	_, err = r.applyCMD(cmd)
@@ -323,8 +323,9 @@ func (r *queryResolver) BulkAdd(ctx context.Context, add []*model.AddNode) (bool
 	}
 	cmd := &fsm.CMD{
 		Method:    fsm.MethodBulkAdd,
-		Value:     add,
+		AddNodes:  add,
 		Timestamp: time.Now(),
+		Metadata:  nil,
 	}
 	_, err = r.applyCMD(cmd)
 	if err != nil {
@@ -341,7 +342,7 @@ func (r *queryResolver) BulkSet(ctx context.Context, set []*model.SetNode) (bool
 
 	cmd := &fsm.CMD{
 		Method:    fsm.MethodBulkSet,
-		Value:     set,
+		SetNodes:  set,
 		Timestamp: time.Now(),
 	}
 	_, err = r.applyCMD(cmd)
@@ -358,7 +359,7 @@ func (r *queryResolver) BulkDel(ctx context.Context, del []*model.Key) (bool, er
 	}
 	cmd := &fsm.CMD{
 		Method:    fsm.MethodBulkDel,
-		Value:     del,
+		Keys:      del,
 		Timestamp: time.Now(),
 		Metadata:  map[string]string{},
 	}
@@ -445,9 +446,9 @@ func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Rel
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
-		Method:    fsm.MethodRelationSetProperties,
-		Value:     properties,
-		Timestamp: time.Now(),
+		Method:     fsm.MethodRelationSetProperties,
+		Properties: properties,
+		Timestamp:  time.Now(),
 		Metadata: map[string]string{
 			"id":   obj.ID,
 			"type": obj.Type,
