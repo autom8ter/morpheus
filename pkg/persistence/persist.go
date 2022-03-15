@@ -165,10 +165,10 @@ func (d *DB) RangeNodes(where *model.NodeWhere) (string, []api.Node, error) {
 		switch where.Expressions[0].Operator {
 		case model.OperatorEq:
 			return d.rangeEQNodes(where)
-		case model.OperatorContains:
-			return d.rangeContainsNodes(where)
 		case model.OperatorHasPrefix:
 			return d.rangeHasPrefixNodes(where)
+		default:
+			return d.rangeContainsNodes(where)
 		}
 	}
 
