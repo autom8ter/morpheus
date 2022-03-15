@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"github.com/autom8ter/morpheus/pkg/helpers"
+	"github.com/autom8ter/morpheus/pkg/logger"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/hashicorp/raft"
 	"github.com/palantir/stacktrace"
@@ -24,7 +25,7 @@ type Storage struct {
 
 func NewStorage(path string) (*Storage, error) {
 	os.MkdirAll(path, 0700)
-	db, err := badger.Open(badger.DefaultOptions(path))
+	db, err := badger.Open(badger.DefaultOptions(path).WithLogger(logger.BadgerLogger()))
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}

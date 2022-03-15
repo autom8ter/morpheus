@@ -1,10 +1,8 @@
 package persistence
 
 import (
-	"fmt"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/autom8ter/morpheus/pkg/graph/fsm"
-	"github.com/autom8ter/morpheus/pkg/logger"
 	"github.com/hashicorp/raft"
 	"github.com/palantir/stacktrace"
 	"io"
@@ -20,7 +18,6 @@ func (d *DB) FSM() raft.FSM {
 			switch cmd.Method {
 			case fsm.MethodAdd:
 				addNode := cmd.Node
-				logger.L.Info(fmt.Sprintf("%s/%s", addNode.Type, addNode.ID), addNode.Properties)
 				n, err := d.AddNode(addNode.Type, addNode.ID, addNode.Properties)
 				if err != nil {
 					return stacktrace.Propagate(err, "")
@@ -68,8 +65,15 @@ func (d *DB) FSM() raft.FSM {
 				}
 				return true
 			case fsm.MethodNodeSetProperties:
+				var (
+					sourceType = cmd.Metadata["type"]
+					sourceID   = cmd.Metadata["id"]
+				)
+				if sourceType == "" || sourceID == "" {
+					return stacktrace.NewError("bad raft cmd")
+				}
 				props := cmd.Properties
-				n, err := d.GetNode(cmd.Metadata["type"], cmd.Metadata["id"])
+				n, err := d.GetNode(sourceType, sourceID)
 				if err != nil {
 					return stacktrace.Propagate(err, "")
 				}
@@ -79,7 +83,15 @@ func (d *DB) FSM() raft.FSM {
 				return n
 			case fsm.MethodNodeAddRelation:
 				key := cmd.Key
-				source, err := d.GetNode(cmd.Metadata["type"], cmd.Metadata["id"])
+				var (
+					sourceType = cmd.Metadata["type"]
+					sourceID   = cmd.Metadata["id"]
+					relation   = cmd.Metadata["relationship"]
+				)
+				if sourceType == "" || sourceID == "" || relation == "" {
+					return stacktrace.NewError("bad raft cmd")
+				}
+				source, err := d.GetNode(sourceType, sourceID)
 				if err != nil {
 					return stacktrace.Propagate(err, "")
 				}
@@ -87,14 +99,18 @@ func (d *DB) FSM() raft.FSM {
 				if err != nil {
 					return stacktrace.Propagate(err, "")
 				}
-				rel, err := source.AddRelationship(cmd.Metadata["relation"], target)
+				rel, err := source.AddRelationship(relation, target)
 				if err != nil {
 					return stacktrace.Propagate(err, "")
 				}
 				return rel
 			case fsm.MethodNodeDelRelation:
+				var (
+					sourceType = cmd.Metadata["type"]
+					sourceID   = cmd.Metadata["id"]
+				)
 				key := cmd.Key
-				source, err := d.GetNode(cmd.Metadata["type"], cmd.Metadata["id"])
+				source, err := d.GetNode(sourceType, sourceID)
 				if err != nil {
 					return stacktrace.Propagate(err, "")
 				}
@@ -104,8 +120,15 @@ func (d *DB) FSM() raft.FSM {
 				}
 				return true
 			case fsm.MethodRelationSetProperties:
+				var (
+					sourceType = cmd.Metadata["type"]
+					sourceID   = cmd.Metadata["id"]
+				)
+				if sourceType == "" || sourceID == "" {
+					return stacktrace.NewError("bad raft cmd")
+				}
 				props := cmd.Properties
-				rel, err := d.GetRelationship(cmd.Metadata["type"], cmd.Metadata["id"])
+				rel, err := d.GetRelationship(sourceType, sourceID)
 				if err != nil {
 					return stacktrace.Propagate(err, "")
 				}

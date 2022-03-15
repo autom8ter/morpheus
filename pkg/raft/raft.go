@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"github.com/autom8ter/morpheus/pkg/raft/storage"
 	transport2 "github.com/autom8ter/morpheus/pkg/raft/transport"
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
+	"github.com/palantir/stacktrace"
 	"github.com/pkg/errors"
 	"net"
 	"os"
@@ -25,7 +27,7 @@ func NewRaft(fsm raft.FSM, lis net.Listener, opts ...Opt) (*Raft, error) {
 	}
 	options.setDefaults()
 	config := raft.DefaultConfig()
-	config.LogLevel = "INFO"
+	config.LogLevel = "ERROR"
 	if options.debug {
 		config.LogLevel = "DEBUG"
 	}
@@ -43,12 +45,16 @@ func NewRaft(fsm raft.FSM, lis net.Listener, opts ...Opt) (*Raft, error) {
 	if options.commitTimeout != 0 {
 		config.CommitTimeout = options.commitTimeout
 	}
+
 	host, _ := os.Hostname()
 	path := fmt.Sprintf("%s/%s", options.raftDir, host)
 	snapshotPath := fmt.Sprintf("%s/snapshots", path)
 	os.MkdirAll(snapshotPath, 0700)
-	transport := transport2.NewNetworkTransport(lis, options.advertise, options.maxPool, options.timeout, os.Stderr)
-	snapshots, err := raft.NewFileSnapshotStore(snapshotPath, options.retainSnapshots, os.Stderr)
+	lgger := rlogger{
+		logger: hclog.L(),
+	}
+	transport := transport2.NewNetworkTransport(lis, options.advertise, options.maxPool, options.timeout, lgger)
+	snapshots, err := raft.NewFileSnapshotStoreWithLogger(snapshotPath, options.retainSnapshots, lgger)
 	if err != nil {
 		return nil, err
 	}
@@ -57,12 +63,12 @@ func NewRaft(fsm raft.FSM, lis net.Listener, opts ...Opt) (*Raft, error) {
 
 	strg, err := storage.NewStorage(storagePath)
 	if err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "")
 	}
 
 	ra, err := raft.NewRaft(config, fsm, strg, strg, snapshots, transport)
 	if err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "")
 	}
 
 	if options.isLeader {

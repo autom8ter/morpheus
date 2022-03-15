@@ -1,8 +1,8 @@
 package transport
 
 import (
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
-	"io"
 	"net"
 	"time"
 )
@@ -36,10 +36,10 @@ func (t *streamLayer) Addr() net.Addr {
 	return t.listener.Addr()
 }
 
-func NewNetworkTransport(lis net.Listener, advertise net.Addr, maxPool int, timeout time.Duration, logOutput io.Writer) *raft.NetworkTransport {
+func NewNetworkTransport(lis net.Listener, advertise net.Addr, maxPool int, timeout time.Duration, logger hclog.Logger) *raft.NetworkTransport {
 	stream := &streamLayer{
 		advertise: advertise,
 		listener:  lis,
 	}
-	return raft.NewNetworkTransport(stream, maxPool, timeout, logOutput)
+	return raft.NewNetworkTransportWithLogger(stream, maxPool, timeout, logger)
 }

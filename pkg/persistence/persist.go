@@ -5,6 +5,7 @@ import (
 	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/autom8ter/morpheus/pkg/graph/model"
+	"github.com/autom8ter/morpheus/pkg/logger"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/palantir/stacktrace"
 	"sort"
@@ -22,7 +23,7 @@ type DB struct {
 }
 
 func New(dir string) (api.Graph, error) {
-	db, err := badger.Open(badger.DefaultOptions(dir).WithLogger(bLogger{}))
+	db, err := badger.Open(badger.DefaultOptions(dir).WithLogger(logger.BadgerLogger()))
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to create database storage")
 	}
@@ -91,7 +92,7 @@ func (d *DB) AddNode(nodeType, nodeID string, properties map[string]interface{})
 		}
 		return nil
 	}); err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "")
 	}
 	return &Node{
 		nodeType: nodeType,
