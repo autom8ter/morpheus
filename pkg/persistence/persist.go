@@ -59,6 +59,12 @@ func (d *DB) GetNode(nodeType, nodeID string) (api.Node, error) {
 			return val.(api.Node), nil
 		}
 	}
+	if nodeType == "" {
+		return nil, stacktrace.NewError("empty node type")
+	}
+	if nodeID == "" {
+		return nil, stacktrace.NewError("empty node id")
+	}
 	n := &Node{
 		nodeType: nodeType,
 		nodeID:   nodeID,
@@ -154,7 +160,6 @@ func (d *DB) RangeNodes(where *model.NodeWhere) (string, []api.Node, error) {
 	var (
 		skipped int
 		skip    int
-		nodes   []api.Node
 		err     error
 	)
 	key := getNodePath(where.Type, "")
@@ -164,7 +169,20 @@ func (d *DB) RangeNodes(where *model.NodeWhere) (string, []api.Node, error) {
 			return "", nil, stacktrace.Propagate(err, "")
 		}
 	}
-
+	evalFunc := func(n api.Node) (bool, error) {
+		passed := true
+		for _, exp := range where.Expressions {
+			passed, err = eval(exp, n)
+			if err != nil {
+				return false, stacktrace.Propagate(err, "")
+			}
+			if !passed {
+				break
+			}
+		}
+		return passed, nil
+	}
+	var nodes []api.Node
 	if err := d.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchSize = prefetchSize
@@ -174,46 +192,45 @@ func (d *DB) RangeNodes(where *model.NodeWhere) (string, []api.Node, error) {
 			if len(nodes) >= *where.PageSize {
 				return nil
 			}
-			if skipped <= skip {
+			if skipped < skip {
 				skipped++
 				continue
 			}
-			var node api.Node
 			item := it.Item()
 			if d.cache != nil {
 				val, ok := d.cache.Get(string(item.Key()))
 				if ok {
-					node = val.(api.Node)
-				} else {
-					split := strings.Split(string(item.Key()), ",")
-					nodeID := split[len(split)-1]
-					n := &Node{
-						nodeType: where.Type,
-						nodeID:   nodeID,
-						db:       d,
-					}
-					data := map[string]interface{}{}
-					if err := item.Value(func(val []byte) error {
-						return encode.Unmarshal(val, &data)
-					}); err != nil {
+					n := val.(api.Node)
+					passed, err := evalFunc(n)
+					if err != nil {
 						return stacktrace.Propagate(err, "")
 					}
-					n.data = data
-					node = n
+					if passed {
+						nodes = append(nodes, n)
+					}
 				}
-			}
-			passed := true
-			for _, exp := range where.Expressions {
-				passed, err = eval(exp, node)
-				if err != nil {
+			} else {
+				split := strings.Split(string(item.Key()), ",")
+				nodeID := split[len(split)-1]
+				n := &Node{
+					nodeType: where.Type,
+					nodeID:   nodeID,
+					db:       d,
+				}
+				data := map[string]interface{}{}
+				if err := item.Value(func(val []byte) error {
+					return encode.Unmarshal(val, &data)
+				}); err != nil {
 					return stacktrace.Propagate(err, "")
 				}
-				if !passed {
-					break
+				n.data = data
+				passed, err := evalFunc(n)
+				if err != nil {
+					return err
 				}
-			}
-			if passed {
-				nodes = append(nodes, node)
+				if passed {
+					nodes = append(nodes, n)
+				}
 			}
 		}
 		return nil

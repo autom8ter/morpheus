@@ -85,8 +85,8 @@ func (d *DB) FSM() raft.FSM {
 			case fsm.MethodNodeAddRelation:
 				key := cmd.Key
 				var (
-					sourceType = cmd.Metadata["type"]
-					sourceID   = cmd.Metadata["id"]
+					sourceType = cmd.Metadata["source.type"]
+					sourceID   = cmd.Metadata["source.id"]
 					relation   = cmd.Metadata["relationship"]
 				)
 				if sourceType == "" || sourceID == "" || relation == "" {

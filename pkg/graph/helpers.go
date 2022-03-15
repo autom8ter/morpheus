@@ -10,19 +10,16 @@ import (
 	"strings"
 )
 
-func toNode(n api.Node) *model.Node {
-	if n == nil {
-		return &model.Node{}
-	}
+func toNode(n api.Node) (*model.Node, error) {
 	props, err := n.Properties()
 	if err != nil {
-		panic(stacktrace.Propagate(err, ""))
+		return nil, stacktrace.Propagate(err, "")
 	}
 	return &model.Node{
 		ID:         n.ID(),
 		Type:       n.Type(),
 		Properties: props,
-	}
+	}, nil
 }
 
 func toRelationship(rel api.Relationship) (*model.Relationship, error) {
@@ -34,11 +31,19 @@ func toRelationship(rel api.Relationship) (*model.Relationship, error) {
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to load target")
 	}
+	sourceNode, err := toNode(source)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "failed to load source node")
+	}
+	targetNode, err := toNode(target)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "failed to load target node")
+	}
 	return &model.Relationship{
 		ID:     rel.ID(),
 		Type:   rel.Type(),
-		Source: toNode(source),
-		Target: toNode(target),
+		Source: sourceNode,
+		Target: targetNode,
 	}, nil
 }
 func (r *Resolver) parseCursor(cursor string) (int, error) {

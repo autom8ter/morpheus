@@ -228,22 +228,21 @@ func (n Node) Relationships(where *model.RelationWhere) (string, []api.Relations
 			return "", nil, stacktrace.Propagate(err, "")
 		}
 	}
+	if where.PageSize == nil {
+		defaultSize := prefetchSize
+		where.PageSize = &defaultSize
+	}
 
 	if err := n.db.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchSize = prefetchSize
 		it := txn.NewIterator(opt)
 		defer it.Close()
-
-		if where.PageSize == nil {
-			defaultSize := prefetchSize
-			where.PageSize = &defaultSize
-		}
 		for it.Seek(source); it.ValidForPrefix(source); it.Next() {
 			if len(rels) >= *where.PageSize {
-				break
+				return nil
 			}
-			if skipped <= skip {
+			if skipped < skip {
 				skipped++
 				continue
 			}
@@ -252,6 +251,7 @@ func (n Node) Relationships(where *model.RelationWhere) (string, []api.Relations
 			rel := &Relationship{
 				relationshipType: where.Relation,
 				relationshipID:   split[len(split)-1],
+				item:             nil,
 				db:               n.db,
 			}
 			data := map[string]interface{}{}

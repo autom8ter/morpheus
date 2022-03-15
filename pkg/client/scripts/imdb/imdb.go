@@ -177,6 +177,9 @@ query ($role: String) {
 	var haveAdded = map[string]struct{}{}
 	for _, role := range roles {
 		rolename := cast.ToString(role["role"])
+		if rolename == "" {
+			continue
+		}
 		if _, ok := haveAdded[rolename]; !ok {
 			// add nodes
 			_, err := client.Queryx(ctx, addRole, map[string]interface{}{

@@ -128,9 +128,7 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 	ctx, cancel = context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		logger.L.Error("failed to shutdown server", map[string]interface{}{
-			"error": err,
-		})
+		logger.L.Error("failed to shutdown server", err, map[string]interface{}{})
 	}
 	g.Close()
 	rft.Close()

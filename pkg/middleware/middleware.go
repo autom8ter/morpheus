@@ -45,9 +45,7 @@ func (m *Middleware) Wrap(handler http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, tokenCtxKey, token)
 		claims, err := m.parseClaims(token)
 		if err != nil {
-			logger.L.Error("failed to parse Authorization token", map[string]interface{}{
-				"error": err,
-			})
+			logger.L.Error("failed to parse Authorization token", err, map[string]interface{}{})
 		}
 		if claims != nil {
 			for _, usr := range m.config.Auth.Users {

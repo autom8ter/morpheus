@@ -2,6 +2,7 @@ package logger
 
 import (
 	"github.com/autom8ter/morpheus/pkg/version"
+	"github.com/palantir/stacktrace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"net/http"
@@ -84,7 +85,11 @@ func (l *Logger) Debug(msg string, fields map[string]interface{}) {
 	l.logger.Debug(msg, toFields(fields)...)
 }
 
-func (l *Logger) Error(msg string, fields map[string]interface{}) {
+func (l *Logger) Error(msg string, err error, fields map[string]interface{}) {
+	if err != nil {
+		fields["error.stack"] = err
+		fields["error.cause"] = stacktrace.RootCause(err)
+	}
 	l.logger.Error(msg, toFields(fields)...)
 }
 
@@ -99,7 +104,7 @@ func (l *Logger) HTTPError(w http.ResponseWriter, message string, err error, sta
 	case 401, 403, 404:
 		l.Info(message, fields)
 	default:
-		l.Error(message, fields)
+		l.Error(message, err, fields)
 	}
 	http.Error(w, message, status)
 }

@@ -33,7 +33,7 @@ func (r rlogger) Warn(msg string, args ...interface{}) {
 }
 
 func (r rlogger) Error(msg string, args ...interface{}) {
-	logger.L.Error(fmt.Sprintf(msg, args...), map[string]interface{}{})
+	logger.L.Error("raft error", fmt.Errorf(msg, args...), map[string]interface{}{})
 }
 
 func (r rlogger) IsTrace() bool {

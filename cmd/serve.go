@@ -51,9 +51,7 @@ var serveCmd = &cobra.Command{
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		if err := server.Serve(ctx, g, cfg); err != nil {
-			logger.L.Error("server failure", map[string]interface{}{
-				"error": err,
-			})
+			logger.L.Error("server failure", err, map[string]interface{}{})
 		}
 	},
 }

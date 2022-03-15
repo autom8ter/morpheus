@@ -8,7 +8,7 @@ import (
 type bLogger struct{}
 
 func (l bLogger) Errorf(s string, i ...interface{}) {
-	L.Error(fmt.Sprintf(s, i...), map[string]interface{}{})
+	L.Error(fmt.Sprintf(s, i...), fmt.Errorf(s), map[string]interface{}{})
 }
 
 func (l bLogger) Warningf(s string, i ...interface{}) {
