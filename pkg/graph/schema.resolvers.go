@@ -5,6 +5,7 @@ package graph
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/autom8ter/morpheus/pkg/api"
@@ -24,14 +25,18 @@ func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[str
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return nil, stacktrace.RootCause(err)
 	}
 	props, err := n.Properties()
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return nil, stacktrace.RootCause(err)
 	}
 	return props, nil
@@ -42,14 +47,18 @@ func (r *nodeResolver) GetProperty(ctx context.Context, obj *model.Node, key str
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return nil, stacktrace.RootCause(err)
 	}
 	val, err := n.GetProperty(key)
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return nil, stacktrace.RootCause(err)
 	}
 	return val, nil
@@ -60,8 +69,6 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method:     fsm.MethodNodeSetProperties,
 		Properties: properties,
@@ -73,7 +80,10 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 	}
 	_, err = r.applyCMD(cmd)
 	if err != nil {
-		return false, stacktrace.Propagate(err, "")
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	return true, nil
 }
@@ -83,21 +93,25 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, rel
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
 		return nil, stacktrace.RootCause(stacktrace.Propagate(err, ""))
 	}
 	rel, ok, err := n.GetRelationship(relationship, id)
 	if err != nil {
-		return nil, stacktrace.RootCause(stacktrace.Propagate(err, ""))
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return nil, stacktrace.RootCause(err)
 	}
 	if !ok {
 		return nil, stacktrace.RootCause(constants.ErrNotFound)
 	}
 	resp, err := toRelationship(rel)
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return nil, stacktrace.RootCause(stacktrace.Propagate(err, ""))
 	}
 	return resp, nil
@@ -108,8 +122,6 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, rel
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method:    fsm.MethodNodeAddRelation,
 		Key:       nodeKey,
@@ -122,10 +134,16 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, rel
 	}
 	val, err := r.applyCMD(cmd)
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return nil, stacktrace.RootCause(err)
 	}
 	rel, err := toRelationship(val.(api.Relationship))
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return nil, stacktrace.RootCause(err)
 	}
 	return rel, nil
@@ -136,8 +154,6 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, key
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method:    fsm.MethodNodeDelRelation,
 		Key:       key,
@@ -149,7 +165,10 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, key
 	}
 	_, err = r.applyCMD(cmd)
 	if err != nil {
-		return false, err
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	return true, nil
 }
@@ -159,8 +178,6 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
 		logger.L.Error("failed to list relationships", map[string]interface{}{
@@ -179,6 +196,9 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where
 	for _, rel := range rels {
 		i, err := toRelationship(rel)
 		if err != nil {
+			logger.L.Error("graphql resolver error", map[string]interface{}{
+				"error": stacktrace.Propagate(err, ""),
+			})
 			return nil, stacktrace.RootCause(err)
 		}
 		resp = append(resp, i)
@@ -197,8 +217,6 @@ func (r *queryResolver) Types(ctx context.Context) ([]string, error) {
 		})
 		return nil, stacktrace.RootCause(err)
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	return r.graph.NodeTypes(), nil
 }
 
@@ -207,8 +225,6 @@ func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, er
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	n, err := r.graph.GetNode(key.Type, key.ID)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
@@ -224,10 +240,11 @@ func (r *queryResolver) List(ctx context.Context, where model.NodeWhere) (*model
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	cursor, nodes, err := r.graph.RangeNodes(&where)
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return nil, stacktrace.RootCause(err)
 	}
 	var resp = &model.Nodes{Cursor: cursor}
@@ -247,9 +264,6 @@ func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node
 		id := uuid.New().String()
 		a.ID = &id
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	cmd := &fsm.CMD{
 		Method: fsm.MethodAdd,
 		Node: model.Node{
@@ -262,6 +276,9 @@ func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node
 	}
 	result, err := r.applyCMD(cmd)
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return nil, stacktrace.RootCause(err)
 	}
 	return toNode(result.(api.Node)), nil
@@ -272,8 +289,6 @@ func (r *queryResolver) Set(ctx context.Context, set model.SetNode) (*model.Node
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method: fsm.MethodSet,
 		Node: model.Node{
@@ -285,6 +300,9 @@ func (r *queryResolver) Set(ctx context.Context, set model.SetNode) (*model.Node
 	}
 	result, err := r.applyCMD(cmd)
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return nil, stacktrace.RootCause(err)
 	}
 	return toNode(result.(api.Node)), nil
@@ -295,8 +313,6 @@ func (r *queryResolver) Del(ctx context.Context, del model.Key) (bool, error) {
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method:    fsm.MethodDel,
 		Key:       del,
@@ -304,6 +320,9 @@ func (r *queryResolver) Del(ctx context.Context, del model.Key) (bool, error) {
 	}
 	_, err = r.applyCMD(cmd)
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return false, stacktrace.RootCause(err)
 	}
 	return true, nil
@@ -329,7 +348,10 @@ func (r *queryResolver) BulkAdd(ctx context.Context, add []*model.AddNode) (bool
 	}
 	_, err = r.applyCMD(cmd)
 	if err != nil {
-		return false, stacktrace.Propagate(err, "")
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	return true, nil
 }
@@ -339,7 +361,6 @@ func (r *queryResolver) BulkSet(ctx context.Context, set []*model.SetNode) (bool
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
 	}
-
 	cmd := &fsm.CMD{
 		Method:    fsm.MethodBulkSet,
 		SetNodes:  set,
@@ -347,6 +368,9 @@ func (r *queryResolver) BulkSet(ctx context.Context, set []*model.SetNode) (bool
 	}
 	_, err = r.applyCMD(cmd)
 	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
 		return false, stacktrace.RootCause(err)
 	}
 	return true, nil
@@ -363,9 +387,6 @@ func (r *queryResolver) BulkDel(ctx context.Context, del []*model.Key) (bool, er
 		Timestamp: time.Now(),
 		Metadata:  map[string]string{},
 	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	_, err = r.applyCMD(cmd)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
@@ -382,17 +403,17 @@ func (r *queryResolver) Login(ctx context.Context, username string, password str
 		logger.L.Error("graphql resolver error", map[string]interface{}{
 			"error": stacktrace.Propagate(err, ""),
 		})
-		return "", stacktrace.Propagate(err, "")
+		return "", stacktrace.RootCause(err)
 	}
 	expired, _, err := helpers.JWTExpired(token)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
 			"error": stacktrace.Propagate(err, ""),
 		})
-		return "", stacktrace.Propagate(err, "")
+		return "", stacktrace.RootCause(err)
 	}
 	if expired {
-		return "", stacktrace.NewError("expired jwt (internal): %s", token)
+		return "", fmt.Errorf("expired jwt (internal): %s", token)
 	}
 	return token, nil
 }
@@ -402,8 +423,6 @@ func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relati
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	n, err := r.graph.GetRelationship(obj.Type, obj.ID)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
@@ -411,7 +430,14 @@ func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relati
 		})
 		return nil, stacktrace.RootCause(err)
 	}
-	return n.Properties()
+	props, err := n.Properties()
+	if err != nil {
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return nil, stacktrace.RootCause(err)
+	}
+	return props, nil
 }
 
 func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relationship, key string) (interface{}, error) {
@@ -419,8 +445,6 @@ func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relat
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	n, err := r.graph.GetRelationship(obj.Type, obj.ID)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
@@ -443,8 +467,6 @@ func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Rel
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	cmd := &fsm.CMD{
 		Method:     fsm.MethodRelationSetProperties,
 		Properties: properties,
@@ -456,7 +478,10 @@ func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Rel
 	}
 	_, err = r.applyCMD(cmd)
 	if err != nil {
-		return false, stacktrace.Propagate(err, "")
+		logger.L.Error("graphql resolver error", map[string]interface{}{
+			"error": stacktrace.Propagate(err, ""),
+		})
+		return false, stacktrace.RootCause(err)
 	}
 	return true, nil
 }
