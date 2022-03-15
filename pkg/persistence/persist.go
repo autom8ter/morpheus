@@ -24,7 +24,7 @@ type DB struct {
 	cache                *ristretto.Cache
 }
 
-func New(dir string, caching bool) (api.Graph, error) {
+func New(dir string) (api.Graph, error) {
 	db, err := badger.Open(badger.DefaultOptions(dir).WithLogger(logger.BadgerLogger()))
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to create database storage")
@@ -37,33 +37,29 @@ func New(dir string, caching bool) (api.Graph, error) {
 		relationshipTypes:    sync.Map{},
 		relationshipFieldMap: sync.Map{},
 	}
-	if caching {
-		cache, err := ristretto.NewCache(&ristretto.Config{
-			NumCounters: 1e7,     // number of keys to track frequency of (10M).
-			MaxCost:     1 << 30, // maximum cost of cache (1GB).
-			BufferItems: 64,      // number of keys per Get buffer.
-		})
-		if err != nil {
-			return nil, stacktrace.Propagate(err, "failed to create database cache")
-		}
-		d.cache = cache
+	cache, err := ristretto.NewCache(&ristretto.Config{
+		NumCounters: 1e7,     // number of keys to track frequency of (10M).
+		MaxCost:     1 << 30, // maximum cost of cache (1GB).
+		BufferItems: 64,      // number of keys per Get buffer.
+	})
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "failed to create database cache")
 	}
+	d.cache = cache
 
 	return d, nil
 }
 
 func (d *DB) GetNode(nodeType, nodeID string) (api.Node, error) {
-	if d.cache != nil {
-		val, ok := d.cache.Get(string(getNodePath(nodeType, nodeID)))
-		if ok {
-			return val.(api.Node), nil
-		}
-	}
 	if nodeType == "" {
 		return nil, stacktrace.NewError("empty node type")
 	}
 	if nodeID == "" {
 		return nil, stacktrace.NewError("empty node id")
+	}
+	val, ok := d.cache.Get(string(getNodePath(nodeType, nodeID)))
+	if ok {
+		return val.(api.Node), nil
 	}
 	n := &Node{
 		nodeType: nodeType,
@@ -93,15 +89,27 @@ func (d *DB) GetNode(nodeType, nodeID string) (api.Node, error) {
 	if len(n.data) == 0 {
 		return nil, stacktrace.Propagate(constants.ErrNotFound, "")
 	}
-	if d.cache != nil {
-		d.cache.Set(string(getNodePath(nodeType, nodeID)), n, 1)
-	}
+	d.cache.Set(string(getNodePath(nodeType, nodeID)), n, 1)
 	return n, nil
 }
 
 func (d *DB) AddNode(nodeType, nodeID string, properties map[string]interface{}) (api.Node, error) {
 	if properties == nil {
 		properties = map[string]interface{}{}
+	}
+	existing, _ := d.GetNode(nodeType, nodeID)
+	if existing != nil && existing.ID() != "" {
+		if err := d.db.Update(func(txn *badger.Txn) error {
+			for k, v := range properties {
+				key := getNodeTypeFieldPath(nodeType, k, v, nodeID)
+				if err := txn.Delete(key); err != nil {
+					return stacktrace.Propagate(err, "")
+				}
+			}
+			return nil
+		}); err != nil {
+			logger.L.Error("failed to delete existing value index", stacktrace.Propagate(err, ""), map[string]interface{}{})
+		}
 	}
 	d.nodeTypes.Store(nodeType, struct{}{})
 	key := getNodePath(nodeType, nodeID)
@@ -133,9 +141,7 @@ func (d *DB) AddNode(nodeType, nodeID string, properties map[string]interface{})
 		data:     properties,
 		db:       d,
 	}
-	if d.cache != nil {
-		d.cache.Set(string(key), n, 1)
-	}
+	d.cache.Set(string(key), n, 1)
 	return n, nil
 }
 
@@ -146,9 +152,7 @@ func (d *DB) DelNode(nodeType, nodeID string) error {
 	}); err != nil {
 		return stacktrace.Propagate(err, "")
 	}
-	if d.cache != nil {
-		d.cache.Del(key)
-	}
+	d.cache.Del(key)
 	return nil
 }
 
@@ -157,6 +161,17 @@ func (d *DB) RangeNodes(where *model.NodeWhere) (string, []api.Node, error) {
 		pageSize := 25
 		where.PageSize = &pageSize
 	}
+	if len(where.Expressions) > 0 {
+		switch where.Expressions[0].Operator {
+		case model.OperatorEq:
+			return d.rangeEQNodes(where)
+		case model.OperatorContains:
+			return d.rangeContainsNodes(where)
+		case model.OperatorHasPrefix:
+			return d.rangeHasPrefixNodes(where)
+		}
+	}
+
 	var (
 		skipped int
 		skip    int
@@ -197,40 +212,38 @@ func (d *DB) RangeNodes(where *model.NodeWhere) (string, []api.Node, error) {
 				continue
 			}
 			item := it.Item()
-			if d.cache != nil {
-				val, ok := d.cache.Get(string(item.Key()))
-				if ok {
-					n := val.(api.Node)
-					passed, err := evalFunc(n)
-					if err != nil {
-						return stacktrace.Propagate(err, "")
-					}
-					if passed {
-						nodes = append(nodes, n)
-					}
-				}
-			} else {
-				split := strings.Split(string(item.Key()), ",")
-				nodeID := split[len(split)-1]
-				n := &Node{
-					nodeType: where.Type,
-					nodeID:   nodeID,
-					db:       d,
-				}
-				data := map[string]interface{}{}
-				if err := item.Value(func(val []byte) error {
-					return encode.Unmarshal(val, &data)
-				}); err != nil {
-					return stacktrace.Propagate(err, "")
-				}
-				n.data = data
+			val, ok := d.cache.Get(string(item.Key()))
+			if ok {
+				n := val.(api.Node)
 				passed, err := evalFunc(n)
 				if err != nil {
-					return err
+					return stacktrace.Propagate(err, "")
 				}
 				if passed {
 					nodes = append(nodes, n)
 				}
+				continue
+			}
+			split := strings.Split(string(item.Key()), ",")
+			nodeID := split[len(split)-1]
+			n := &Node{
+				nodeType: where.Type,
+				nodeID:   nodeID,
+				db:       d,
+			}
+			data := map[string]interface{}{}
+			if err := item.Value(func(val []byte) error {
+				return encode.Unmarshal(val, &data)
+			}); err != nil {
+				return stacktrace.Propagate(err, "")
+			}
+			n.data = data
+			passed, err := evalFunc(n)
+			if err != nil {
+				return err
+			}
+			if passed {
+				nodes = append(nodes, n)
 			}
 		}
 		return nil

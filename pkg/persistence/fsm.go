@@ -142,7 +142,7 @@ func (d *DB) FSM() raft.FSM {
 			}
 		},
 		SnapshotFunc: func() (*fsm.Snapshot, error) {
-			return nil, nil
+			return nil, stacktrace.NewError("unimplemented")
 		},
 		RestoreFunc: func(closer io.ReadCloser) error {
 			return stacktrace.NewError("unimplemented")

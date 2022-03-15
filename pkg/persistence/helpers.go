@@ -73,7 +73,13 @@ func getRelationshipPath(relation, id string) []byte {
 }
 
 func getNodeTypeFieldPath(nodeType, field string, fieldValue interface{}, nodeID string) []byte {
-	key := append([]string{string(nodeFieldsPrefix)}, nodeType, field, fmt.Sprint(fieldValue), nodeID)
+	key := append([]string{string(nodeFieldsPrefix)}, nodeType, field)
+	if fieldValue != nil {
+		key = append(key, fmt.Sprint(fieldValue))
+	}
+	if nodeID != "" {
+		key = append(key, nodeID)
+	}
 	return []byte(strings.Join(key, ","))
 }
 
