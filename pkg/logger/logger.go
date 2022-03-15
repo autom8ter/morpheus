@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	L = New()
+	L = New(true)
 }
 
 var L *Logger
@@ -18,7 +18,7 @@ type Logger struct {
 	logger *zap.Logger
 }
 
-func New() *Logger {
+func New(json bool) *Logger {
 	hst, _ := os.Hostname()
 	fields := map[string]interface{}{
 		"host":    hst,
@@ -27,23 +27,44 @@ func New() *Logger {
 	}
 
 	zap.NewDevelopmentConfig()
-	jsonEncoder := zapcore.NewJSONEncoder(zapcore.EncoderConfig{
-		MessageKey:     "msg",
-		LevelKey:       "level",
-		TimeKey:        "ts",
-		NameKey:        "logger",
-		CallerKey:      "caller",
-		FunctionKey:    "function",
-		StacktraceKey:  "stacktrace",
-		EncodeLevel:    zapcore.LowercaseLevelEncoder,
-		EncodeTime:     zapcore.EpochTimeEncoder,
-		EncodeDuration: zapcore.SecondsDurationEncoder,
-		EncodeCaller:   zapcore.FullCallerEncoder,
-		EncodeName:     zapcore.FullNameEncoder,
-	})
-	core := zapcore.NewCore(jsonEncoder, os.Stdout, zap.InfoLevel)
-	return &Logger{
-		logger: zap.New(core).With(toFields(fields)...),
+	if json {
+		jsonEncoder := zapcore.NewJSONEncoder(zapcore.EncoderConfig{
+			MessageKey:     "msg",
+			LevelKey:       "level",
+			TimeKey:        "ts",
+			NameKey:        "logger",
+			CallerKey:      "caller",
+			FunctionKey:    "function",
+			StacktraceKey:  "stacktrace",
+			EncodeLevel:    zapcore.LowercaseLevelEncoder,
+			EncodeTime:     zapcore.EpochTimeEncoder,
+			EncodeDuration: zapcore.SecondsDurationEncoder,
+			EncodeCaller:   zapcore.FullCallerEncoder,
+			EncodeName:     zapcore.FullNameEncoder,
+		})
+		core := zapcore.NewCore(jsonEncoder, os.Stdout, zap.InfoLevel)
+		return &Logger{
+			logger: zap.New(core).With(toFields(fields)...),
+		}
+	} else {
+		txtEncoder := zapcore.NewConsoleEncoder(zapcore.EncoderConfig{
+			MessageKey:     "msg",
+			LevelKey:       "level",
+			TimeKey:        "ts",
+			NameKey:        "logger",
+			CallerKey:      "caller",
+			FunctionKey:    "function",
+			StacktraceKey:  "stacktrace",
+			EncodeLevel:    zapcore.LowercaseLevelEncoder,
+			EncodeTime:     zapcore.EpochTimeEncoder,
+			EncodeDuration: zapcore.SecondsDurationEncoder,
+			EncodeCaller:   zapcore.FullCallerEncoder,
+			EncodeName:     zapcore.FullNameEncoder,
+		})
+		core := zapcore.NewCore(txtEncoder, os.Stdout, zap.InfoLevel)
+		return &Logger{
+			logger: zap.New(core).With(toFields(fields)...),
+		}
 	}
 }
 

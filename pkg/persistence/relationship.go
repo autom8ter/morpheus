@@ -1,7 +1,6 @@
 package persistence
 
 import (
-	"fmt"
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/encode"
@@ -13,7 +12,7 @@ import (
 type Relationship struct {
 	relationshipType string
 	relationshipID   string
-	item             []byte
+	item             map[string]interface{}
 	db               *DB
 }
 
@@ -26,14 +25,10 @@ func (n *Relationship) ID() string {
 }
 
 func (n *Relationship) Properties() (map[string]interface{}, error) {
+	if len(n.item) > 0 {
+		return n.item, nil
+	}
 	data := map[string]interface{}{}
-	//if len(n.item) > 0 {
-	//	if err := encode.Unmarshal(n.item, &data); err != nil {
-	//		return nil, stacktrace.Propagate(err, "failed to get relationship properties")
-	//	}
-	//	n.item = nil
-	//	return data, nil
-	//}
 	if err := n.db.db.View(func(txn *badger.Txn) error {
 		var key = getRelationshipPath(n.relationshipType, n.relationshipID)
 		item, err := txn.Get(key)
@@ -41,7 +36,6 @@ func (n *Relationship) Properties() (map[string]interface{}, error) {
 			return stacktrace.Propagate(err, "failed to get relationship properties")
 		}
 		if err := item.Value(func(val []byte) error {
-			n.item = val
 			return encode.Unmarshal(val, &data)
 		}); err != nil {
 			return stacktrace.Propagate(err, "failed to get relationship properties")
@@ -50,6 +44,7 @@ func (n *Relationship) Properties() (map[string]interface{}, error) {
 	}); err != nil {
 		return nil, stacktrace.Propagate(err, "failed to get relationship properties")
 	}
+	n.item = data
 	return data, nil
 }
 
@@ -65,6 +60,7 @@ func (n *Relationship) GetProperty(name string) (interface{}, error) {
 }
 
 func (n *Relationship) SetProperties(properties map[string]interface{}) error {
+
 	bits, err := encode.Marshal(properties)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
@@ -75,6 +71,7 @@ func (n *Relationship) SetProperties(properties map[string]interface{}) error {
 	}); err != nil {
 		return stacktrace.Propagate(err, "")
 	}
+	n.item = properties
 	return nil
 }
 
@@ -112,23 +109,23 @@ func (r Relationship) Relation() (string, error) {
 func (r Relationship) Source() (api.Node, error) {
 	all, err := r.Properties()
 	if err != nil {
-		return nil, stacktrace.Propagate(err, fmt.Sprintf("%s %s", all[SourceType], all[SourceID]))
+		return nil, stacktrace.Propagate(err, "failed to load source node")
 	}
-	return &Node{
-		nodeType: cast.ToString(all[SourceType]),
-		nodeID:   cast.ToString(all[SourceID]),
-		db:       r.db,
-	}, nil
+	n, err := r.db.GetNode(cast.ToString(all[SourceType]), cast.ToString(all[SourceID]))
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
+	}
+	return n, nil
 }
 
 func (r Relationship) Target() (api.Node, error) {
 	all, err := r.Properties()
 	if err != nil {
-		return nil, stacktrace.Propagate(err, fmt.Sprintf("%s %s", r.Type(), r.ID()))
+		return nil, stacktrace.Propagate(err, "failed to load target node")
 	}
-	return &Node{
-		nodeType: cast.ToString(all[TargetType]),
-		nodeID:   cast.ToString(all[TargetID]),
-		db:       r.db,
-	}, nil
+	n, err := r.db.GetNode(cast.ToString(all[TargetType]), cast.ToString(all[TargetID]))
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "")
+	}
+	return n, nil
 }

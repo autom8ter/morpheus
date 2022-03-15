@@ -15,7 +15,7 @@ import (
 type Node struct {
 	nodeType string
 	nodeID   string
-	item     []byte
+	data     map[string]interface{}
 	db       *DB
 }
 
@@ -28,30 +28,27 @@ func (n Node) ID() string {
 }
 
 func (n Node) Properties() (map[string]interface{}, error) {
-	data := map[string]interface{}{}
-	if n.item != nil {
-		if err := encode.Unmarshal(n.item, &data); err != nil {
-			return nil, stacktrace.Propagate(err, "")
-		}
-		n.item = nil
-		return data, nil
+	if n.data != nil {
+		return n.data, nil
 	}
 	if err := n.db.db.View(func(txn *badger.Txn) error {
 		var key = getNodePath(n.nodeType, n.nodeID)
+		data := map[string]interface{}{}
 		item, err := txn.Get(key)
 		if err != nil {
-			return stacktrace.Propagate(err, "")
+			return stacktrace.Propagate(err, "failed to get key %s", string(key))
 		}
 		if err := item.Value(func(val []byte) error {
 			return encode.Unmarshal(val, &data)
 		}); err != nil {
-			return stacktrace.Propagate(err, "")
+			return stacktrace.Propagate(err, "failed to get key %s", string(key))
 		}
+		n.data = data
 		return nil
 	}); err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, err
 	}
-	return data, nil
+	return n.data, nil
 }
 
 func (n Node) GetProperty(name string) (interface{}, error) {
@@ -66,6 +63,9 @@ func (n Node) GetProperty(name string) (interface{}, error) {
 }
 
 func (n Node) SetProperties(properties map[string]interface{}) error {
+	if properties == nil {
+		properties = map[string]interface{}{}
+	}
 	_, err := n.db.AddNode(n.nodeType, n.nodeID, properties)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
@@ -117,23 +117,24 @@ func (n Node) AddRelationship(relationship string, node api.Node) (api.Relations
 		if err := txn.Set(target, bits); err != nil {
 			return stacktrace.Propagate(err, "")
 		}
-		//for k, v := range values {
-		//	n.db.relationshipFieldMap.Store(strings.Join([]string{relationship, k}, ","), struct{}{})
-		//	key := getRelationshipFieldPath(relationship, k, v, relID)
-		//	if err := txn.Set(key, bits); err != nil {
-		//		return stacktrace.Propagate(err, "")
-		//	}
-		//}
+		for k, v := range values {
+			n.db.relationshipFieldMap.Store(strings.Join([]string{relationship, k}, ","), struct{}{})
+			key := getRelationshipFieldPath(relationship, k, v, relID)
+			if err := txn.Set(key, bits); err != nil {
+				return stacktrace.Propagate(err, "")
+			}
+		}
 		return nil
 	}); err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}
-	return &Relationship{
+	r := &Relationship{
 		relationshipType: relationship,
 		relationshipID:   relID,
-		item:             bits,
+		item:             values,
 		db:               n.db,
-	}, nil
+	}
+	return r, nil
 }
 
 func (n Node) DelRelationship(relationship string, id string) error {
@@ -142,7 +143,7 @@ func (n Node) DelRelationship(relationship string, id string) error {
 		return stacktrace.Propagate(err, "")
 	}
 	if !ok {
-		return nil
+		return stacktrace.Propagate(constants.ErrNotFound, "")
 	}
 	targetNode, err := rel.Target()
 	if err != nil {
@@ -189,7 +190,7 @@ func (n Node) GetRelationship(relation, id string) (api.Relationship, bool, erro
 	rel := &Relationship{
 		relationshipType: relation,
 		relationshipID:   id,
-		item:             nil,
+		item:             map[string]interface{}{},
 		db:               n.db,
 	}
 	if err := n.db.db.View(func(txn *badger.Txn) error {
@@ -198,8 +199,7 @@ func (n Node) GetRelationship(relation, id string) (api.Relationship, bool, erro
 			return stacktrace.Propagate(err, "")
 		}
 		if err := item.Value(func(val []byte) error {
-			rel.item = val
-			return nil
+			return encode.Unmarshal(val, &rel.item)
 		}); err != nil {
 			return err
 		}
@@ -207,7 +207,7 @@ func (n Node) GetRelationship(relation, id string) (api.Relationship, bool, erro
 	}); err != nil {
 		return nil, false, stacktrace.Propagate(err, "")
 	}
-	if rel.item == nil {
+	if len(rel.item) == 0 {
 		return nil, false, stacktrace.Propagate(constants.ErrNotFound, "")
 	}
 	return rel, true, nil
@@ -252,17 +252,17 @@ func (n Node) Relationships(where *model.RelationWhere) (string, []api.Relations
 			rel := &Relationship{
 				relationshipType: where.Relation,
 				relationshipID:   split[len(split)-1],
-				item:             nil,
 				db:               n.db,
 			}
+			data := map[string]interface{}{}
 			if err := item.Value(func(val []byte) error {
-				rel.item = val
-				return nil
+				return encode.Unmarshal(val, &data)
 			}); err != nil {
 				return stacktrace.Propagate(err, "")
 			}
+			rel.item = data
 
-			if rel.item != nil {
+			if len(rel.item) > 0 {
 				passed := true
 				for _, exp := range where.Expressions {
 					passed, err = eval(exp, rel)

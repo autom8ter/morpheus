@@ -107,24 +107,24 @@ func eval(exp *model.Expression, ent api.Entity) (bool, error) {
 	}
 	switch v := ent.(type) {
 	case api.Relationship:
-		if strings.HasPrefix(exp.Key, "source.") {
+		if strings.HasPrefix(exp.Key, "_source.") {
 			source, err := v.Source()
 			if err != nil {
 				return false, err
 			}
 			return eval(&model.Expression{
-				Key:      strings.TrimPrefix(exp.Key, "source."),
+				Key:      strings.TrimPrefix(exp.Key, "_source."),
 				Operator: exp.Operator,
 				Value:    exp.Value,
 			}, source)
 		}
-		if strings.HasPrefix(exp.Key, "target.") {
+		if strings.HasPrefix(exp.Key, "_target.") {
 			target, err := v.Target()
 			if err != nil {
 				return false, err
 			}
 			return eval(&model.Expression{
-				Key:      strings.TrimPrefix(exp.Key, "target."),
+				Key:      strings.TrimPrefix(exp.Key, "_target."),
 				Operator: exp.Operator,
 				Value:    exp.Value,
 			}, target)

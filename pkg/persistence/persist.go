@@ -7,6 +7,7 @@ import (
 	"github.com/autom8ter/morpheus/pkg/graph/model"
 	"github.com/autom8ter/morpheus/pkg/logger"
 	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/ristretto"
 	"github.com/palantir/stacktrace"
 	"sort"
 	"strings"
@@ -20,48 +21,74 @@ type DB struct {
 	nodeFieldMap         sync.Map
 	relationshipTypes    sync.Map
 	relationshipFieldMap sync.Map
+	cache                *ristretto.Cache
 }
 
-func New(dir string) (api.Graph, error) {
+func New(dir string, caching bool) (api.Graph, error) {
 	db, err := badger.Open(badger.DefaultOptions(dir).WithLogger(logger.BadgerLogger()))
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to create database storage")
 	}
-	return &DB{
+	d := &DB{
 		dir:                  dir,
 		db:                   db,
 		nodeTypes:            sync.Map{},
 		nodeFieldMap:         sync.Map{},
 		relationshipTypes:    sync.Map{},
 		relationshipFieldMap: sync.Map{},
-	}, nil
+	}
+	if caching {
+		cache, err := ristretto.NewCache(&ristretto.Config{
+			NumCounters: 1e7,     // number of keys to track frequency of (10M).
+			MaxCost:     1 << 30, // maximum cost of cache (1GB).
+			BufferItems: 64,      // number of keys per Get buffer.
+		})
+		if err != nil {
+			return nil, stacktrace.Propagate(err, "failed to create database cache")
+		}
+		d.cache = cache
+	}
+
+	return d, nil
 }
 
 func (d *DB) GetNode(nodeType, nodeID string) (api.Node, error) {
+	if d.cache != nil {
+		val, ok := d.cache.Get(string(getNodePath(nodeType, nodeID)))
+		if ok {
+			return val.(api.Node), nil
+		}
+	}
 	n := &Node{
 		nodeType: nodeType,
 		nodeID:   nodeID,
 		db:       d,
 	}
-	key := getNodePath(nodeType, nodeID)
+
 	if err := d.db.View(func(txn *badger.Txn) error {
+		data := map[string]interface{}{}
+		key := getNodePath(nodeType, nodeID)
 		item, err := txn.Get(key)
 		if err != nil {
-			return stacktrace.Propagate(err, "")
+			return stacktrace.Propagate(err, "key=%s", string(key))
 		}
 		if err := item.Value(func(val []byte) error {
-			n.item = val
-			return nil
+			return encode.Unmarshal(val, &data)
 		}); err != nil {
-			return stacktrace.Propagate(err, "")
+			return stacktrace.Propagate(err, "key=%s", string(key))
 		}
+		n.data = data
 		return nil
 
 	}); err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "")
 	}
-	if n.item == nil {
+
+	if len(n.data) == 0 {
 		return nil, stacktrace.Propagate(constants.ErrNotFound, "")
+	}
+	if d.cache != nil {
+		d.cache.Set(string(getNodePath(nodeType, nodeID)), n, 1)
 	}
 	return n, nil
 }
@@ -94,11 +121,16 @@ func (d *DB) AddNode(nodeType, nodeID string, properties map[string]interface{})
 	}); err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}
-	return &Node{
+	n := &Node{
 		nodeType: nodeType,
 		nodeID:   nodeID,
+		data:     properties,
 		db:       d,
-	}, nil
+	}
+	if d.cache != nil {
+		d.cache.Set(string(key), n, 1)
+	}
+	return n, nil
 }
 
 func (d *DB) DelNode(nodeType, nodeID string) error {
@@ -107,6 +139,9 @@ func (d *DB) DelNode(nodeType, nodeID string) error {
 		return txn.Delete(key)
 	}); err != nil {
 		return stacktrace.Propagate(err, "")
+	}
+	if d.cache != nil {
+		d.cache.Del(key)
 	}
 	return nil
 }
@@ -143,33 +178,42 @@ func (d *DB) RangeNodes(where *model.NodeWhere) (string, []api.Node, error) {
 				skipped++
 				continue
 			}
+			var node api.Node
 			item := it.Item()
-			split := strings.Split(string(item.Key()), ",")
-			node := &Node{
-				nodeType: where.Type,
-				nodeID:   split[len(split)-1],
-				db:       d,
-			}
-			if err := item.Value(func(val []byte) error {
-				node.item = val
-				return nil
-			}); err != nil {
-				return stacktrace.Propagate(err, "")
-			}
-			if node.item != nil {
-				passed := true
-				for _, exp := range where.Expressions {
-					passed, err = eval(exp, node)
-					if err != nil {
+			if d.cache != nil {
+				val, ok := d.cache.Get(string(item.Key()))
+				if ok {
+					node = val.(api.Node)
+				} else {
+					split := strings.Split(string(item.Key()), ",")
+					nodeID := split[len(split)-1]
+					n := &Node{
+						nodeType: where.Type,
+						nodeID:   nodeID,
+						db:       d,
+					}
+					data := map[string]interface{}{}
+					if err := item.Value(func(val []byte) error {
+						return encode.Unmarshal(val, &data)
+					}); err != nil {
 						return stacktrace.Propagate(err, "")
 					}
-					if !passed {
-						break
-					}
+					n.data = data
+					node = n
 				}
-				if passed {
-					nodes = append(nodes, node)
+			}
+			passed := true
+			for _, exp := range where.Expressions {
+				passed, err = eval(exp, node)
+				if err != nil {
+					return stacktrace.Propagate(err, "")
 				}
+				if !passed {
+					break
+				}
+			}
+			if passed {
+				nodes = append(nodes, node)
 			}
 		}
 		return nil
@@ -193,9 +237,9 @@ func (d *DB) GetRelationship(relation string, id string) (api.Relationship, erro
 	r := &Relationship{
 		relationshipType: relation,
 		relationshipID:   id,
-		item:             nil,
 		db:               d,
 	}
+	data := map[string]interface{}{}
 	key := getRelationshipPath(relation, id)
 	if err := d.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
@@ -203,8 +247,7 @@ func (d *DB) GetRelationship(relation string, id string) (api.Relationship, erro
 			return stacktrace.Propagate(err, "")
 		}
 		if err := item.Value(func(val []byte) error {
-			r.item = val
-			return nil
+			return encode.Unmarshal(val, &data)
 		}); err != nil {
 			return stacktrace.Propagate(err, "")
 		}
@@ -213,6 +256,7 @@ func (d *DB) GetRelationship(relation string, id string) (api.Relationship, erro
 	}); err != nil {
 		return nil, err
 	}
+	r.item = data
 	if r.item == nil {
 		return nil, stacktrace.Propagate(constants.ErrNotFound, "")
 	}
@@ -258,16 +302,16 @@ func (d *DB) RangeRelationships(where *model.RelationWhere) (string, []api.Relat
 			rel := &Relationship{
 				relationshipType: where.Relation,
 				relationshipID:   split[len(split)-1],
-				item:             nil,
 				db:               d,
 			}
+			data := map[string]interface{}{}
 			if err := item.Value(func(val []byte) error {
-				rel.item = val
-				return nil
+				return encode.Unmarshal(val, &data)
 			}); err != nil {
 				return stacktrace.Propagate(err, "")
 			}
-			if rel.item != nil {
+			rel.item = data
+			if len(rel.item) > 0 {
 				passed := true
 				for _, exp := range where.Expressions {
 					passed, err = eval(exp, rel)

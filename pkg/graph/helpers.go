@@ -11,9 +11,12 @@ import (
 )
 
 func toNode(n api.Node) *model.Node {
-	props, _ := n.Properties()
 	if n == nil {
 		return &model.Node{}
+	}
+	props, err := n.Properties()
+	if err != nil {
+		panic(stacktrace.Propagate(err, ""))
 	}
 	return &model.Node{
 		ID:         n.ID(),

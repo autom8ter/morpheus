@@ -6,6 +6,7 @@ package graph
 import (
 	"context"
 	"fmt"
+	"github.com/99designs/gqlgen/graphql"
 	"time"
 
 	"github.com/autom8ter/morpheus/pkg/api"
@@ -21,6 +22,7 @@ import (
 )
 
 func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[string]interface{}, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
@@ -28,14 +30,20 @@ func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[str
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
+			"node.type":      obj.Type,
+			"node.id":        obj.ID,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
 	props, err := n.Properties()
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
+			"node.type":      obj.Type,
+			"node.id":        obj.ID,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
@@ -43,6 +51,7 @@ func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[str
 }
 
 func (r *nodeResolver) GetProperty(ctx context.Context, obj *model.Node, key string) (interface{}, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
@@ -50,14 +59,20 @@ func (r *nodeResolver) GetProperty(ctx context.Context, obj *model.Node, key str
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
+			"node.type":      obj.Type,
+			"node.id":        obj.ID,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
 	val, err := n.GetProperty(key)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
+			"node.type":      obj.Type,
+			"node.id":        obj.ID,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
@@ -65,6 +80,7 @@ func (r *nodeResolver) GetProperty(ctx context.Context, obj *model.Node, key str
 }
 
 func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, properties map[string]interface{}) (bool, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
@@ -81,7 +97,10 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 	_, err = r.applyCMD(cmd)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
+			"node.type":      obj.Type,
+			"node.id":        obj.ID,
 		})
 		return false, stacktrace.RootCause(err)
 	}
@@ -89,6 +108,7 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 }
 
 func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, relationship string, id string) (*model.Relationship, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
@@ -100,7 +120,8 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, rel
 	rel, ok, err := n.GetRelationship(relationship, id)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
@@ -110,7 +131,8 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, rel
 	resp, err := toRelationship(rel)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return nil, stacktrace.RootCause(stacktrace.Propagate(err, ""))
 	}
@@ -118,6 +140,7 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, rel
 }
 
 func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, relationship string, nodeKey model.Key) (*model.Relationship, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
@@ -135,14 +158,16 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, rel
 	val, err := r.applyCMD(cmd)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
 	rel, err := toRelationship(val.(api.Relationship))
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
@@ -150,6 +175,7 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, rel
 }
 
 func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, key model.Key) (bool, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
@@ -166,7 +192,8 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, key
 	_, err = r.applyCMD(cmd)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return false, stacktrace.RootCause(err)
 	}
@@ -174,6 +201,7 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, key
 }
 
 func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where model.RelationWhere) (*model.Relationships, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
@@ -181,14 +209,16 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
 		logger.L.Error("failed to list relationships", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
 	cursor, rels, err := n.Relationships(&where)
 	if err != nil {
 		logger.L.Error("failed to list relationships", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
@@ -197,9 +227,9 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where
 		i, err := toRelationship(rel)
 		if err != nil {
 			logger.L.Error("graphql resolver error", map[string]interface{}{
-				"error": stacktrace.Propagate(err, ""),
+				"error":         stacktrace.Propagate(err, ""),
 				"relation_type": rel.Type(),
-				"relation_id": rel.ID(),
+				"relation_id":   rel.ID(),
 			})
 			return nil, stacktrace.RootCause(err)
 		}
@@ -212,10 +242,12 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where
 }
 
 func (r *queryResolver) Types(ctx context.Context) ([]string, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		logger.L.Error("failed to list relationships", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
@@ -223,6 +255,7 @@ func (r *queryResolver) Types(ctx context.Context) ([]string, error) {
 }
 
 func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
@@ -230,7 +263,10 @@ func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, er
 	n, err := r.graph.GetNode(key.Type, key.ID)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
+			"node.type":      key.Type,
+			"node.id":        key.ID,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
@@ -238,6 +274,7 @@ func (r *queryResolver) Get(ctx context.Context, key model.Key) (*model.Node, er
 }
 
 func (r *queryResolver) List(ctx context.Context, where model.NodeWhere) (*model.Nodes, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
@@ -245,7 +282,8 @@ func (r *queryResolver) List(ctx context.Context, where model.NodeWhere) (*model
 	cursor, nodes, err := r.graph.RangeNodes(&where)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
@@ -257,6 +295,7 @@ func (r *queryResolver) List(ctx context.Context, where model.NodeWhere) (*model
 }
 
 func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
@@ -279,7 +318,8 @@ func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node
 	result, err := r.applyCMD(cmd)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
@@ -287,6 +327,7 @@ func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node
 }
 
 func (r *queryResolver) Set(ctx context.Context, set model.SetNode) (*model.Node, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
@@ -303,7 +344,8 @@ func (r *queryResolver) Set(ctx context.Context, set model.SetNode) (*model.Node
 	result, err := r.applyCMD(cmd)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
@@ -311,6 +353,7 @@ func (r *queryResolver) Set(ctx context.Context, set model.SetNode) (*model.Node
 }
 
 func (r *queryResolver) Del(ctx context.Context, del model.Key) (bool, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
@@ -323,7 +366,8 @@ func (r *queryResolver) Del(ctx context.Context, del model.Key) (bool, error) {
 	_, err = r.applyCMD(cmd)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return false, stacktrace.RootCause(err)
 	}
@@ -331,6 +375,7 @@ func (r *queryResolver) Del(ctx context.Context, del model.Key) (bool, error) {
 }
 
 func (r *queryResolver) BulkAdd(ctx context.Context, add []*model.AddNode) (bool, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
@@ -351,7 +396,8 @@ func (r *queryResolver) BulkAdd(ctx context.Context, add []*model.AddNode) (bool
 	_, err = r.applyCMD(cmd)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return false, stacktrace.RootCause(err)
 	}
@@ -359,6 +405,7 @@ func (r *queryResolver) BulkAdd(ctx context.Context, add []*model.AddNode) (bool
 }
 
 func (r *queryResolver) BulkSet(ctx context.Context, set []*model.SetNode) (bool, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
@@ -371,7 +418,8 @@ func (r *queryResolver) BulkSet(ctx context.Context, set []*model.SetNode) (bool
 	_, err = r.applyCMD(cmd)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return false, stacktrace.RootCause(err)
 	}
@@ -379,6 +427,7 @@ func (r *queryResolver) BulkSet(ctx context.Context, set []*model.SetNode) (bool
 }
 
 func (r *queryResolver) BulkDel(ctx context.Context, del []*model.Key) (bool, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
@@ -392,7 +441,8 @@ func (r *queryResolver) BulkDel(ctx context.Context, del []*model.Key) (bool, er
 	_, err = r.applyCMD(cmd)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return false, stacktrace.RootCause(err)
 	}
@@ -400,17 +450,20 @@ func (r *queryResolver) BulkDel(ctx context.Context, del []*model.Key) (bool, er
 }
 
 func (r *queryResolver) Login(ctx context.Context, username string, password string) (string, error) {
+	op := graphql.GetOperationContext(ctx)
 	token, err := r.mw.Login(username, password)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return "", stacktrace.RootCause(err)
 	}
 	expired, _, err := helpers.JWTExpired(token)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return "", stacktrace.RootCause(err)
 	}
@@ -421,6 +474,7 @@ func (r *queryResolver) Login(ctx context.Context, username string, password str
 }
 
 func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
@@ -428,14 +482,16 @@ func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relati
 	n, err := r.graph.GetRelationship(obj.Type, obj.ID)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
 	props, err := n.Properties()
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
@@ -443,6 +499,7 @@ func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relati
 }
 
 func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relationship, key string) (interface{}, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
@@ -450,14 +507,16 @@ func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relat
 	n, err := r.graph.GetRelationship(obj.Type, obj.ID)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return false, stacktrace.RootCause(err)
 	}
 	val, err := n.GetProperty(key)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return false, stacktrace.RootCause(err)
 	}
@@ -465,6 +524,7 @@ func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relat
 }
 
 func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Relationship, properties map[string]interface{}) (bool, error) {
+	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
@@ -481,7 +541,8 @@ func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Rel
 	_, err = r.applyCMD(cmd)
 	if err != nil {
 		logger.L.Error("graphql resolver error", map[string]interface{}{
-			"error": stacktrace.Propagate(err, ""),
+			"error":          stacktrace.Propagate(err, ""),
+			"operation.name": op.OperationName,
 		})
 		return false, stacktrace.RootCause(err)
 	}

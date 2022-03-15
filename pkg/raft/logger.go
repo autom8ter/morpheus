@@ -87,4 +87,3 @@ func (r rlogger) StandardLogger(opts *hclog.StandardLoggerOptions) *log.Logger {
 func (r rlogger) StandardWriter(opts *hclog.StandardLoggerOptions) io.Writer {
 	return r.logger.StandardWriter(opts)
 }
-

@@ -3,6 +3,7 @@ package persistence
 import (
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/autom8ter/morpheus/pkg/graph/fsm"
+	"github.com/autom8ter/morpheus/pkg/helpers"
 	"github.com/hashicorp/raft"
 	"github.com/palantir/stacktrace"
 	"io"
@@ -13,28 +14,28 @@ func (d *DB) FSM() raft.FSM {
 		ApplyFunc: func(log *raft.Log) interface{} {
 			var cmd fsm.CMD
 			if err := encode.Unmarshal(log.Data, &cmd); err != nil {
-				return stacktrace.Propagate(err, "")
+				return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 			}
 			switch cmd.Method {
 			case fsm.MethodAdd:
 				addNode := cmd.Node
 				n, err := d.AddNode(addNode.Type, addNode.ID, addNode.Properties)
 				if err != nil {
-					return stacktrace.Propagate(err, "")
+					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
 				return n
 			case fsm.MethodSet:
 				addNode := cmd.Node
 				n, err := d.AddNode(addNode.Type, addNode.ID, addNode.Properties)
 				if err != nil {
-					return stacktrace.Propagate(err, "")
+					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
 				return n
 			case fsm.MethodDel:
 				key := cmd.Key
 				err := d.DelNode(key.Type, key.ID)
 				if err != nil {
-					return stacktrace.Propagate(err, "")
+					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
 				return true
 			case fsm.MethodBulkDel:
@@ -42,7 +43,7 @@ func (d *DB) FSM() raft.FSM {
 				for _, key := range keys {
 					err := d.DelNode(key.Type, key.ID)
 					if err != nil {
-						return stacktrace.Propagate(err, "")
+						return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 					}
 				}
 				return true
@@ -51,7 +52,7 @@ func (d *DB) FSM() raft.FSM {
 				for _, set := range sets {
 					_, err := d.AddNode(set.Type, set.ID, set.Properties)
 					if err != nil {
-						return stacktrace.Propagate(err, "")
+						return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 					}
 				}
 				return true
@@ -60,7 +61,7 @@ func (d *DB) FSM() raft.FSM {
 				for _, add := range adds {
 					_, err := d.AddNode(add.Type, *add.ID, add.Properties)
 					if err != nil {
-						return stacktrace.Propagate(err, "")
+						return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 					}
 				}
 				return true
@@ -75,10 +76,10 @@ func (d *DB) FSM() raft.FSM {
 				props := cmd.Properties
 				n, err := d.GetNode(sourceType, sourceID)
 				if err != nil {
-					return stacktrace.Propagate(err, "")
+					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
 				if err := n.SetProperties(props); err != nil {
-					return stacktrace.Propagate(err, "")
+					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
 				return n
 			case fsm.MethodNodeAddRelation:
@@ -93,15 +94,15 @@ func (d *DB) FSM() raft.FSM {
 				}
 				source, err := d.GetNode(sourceType, sourceID)
 				if err != nil {
-					return stacktrace.Propagate(err, "")
+					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
 				target, err := d.GetNode(key.Type, key.ID)
 				if err != nil {
-					return stacktrace.Propagate(err, "")
+					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
 				rel, err := source.AddRelationship(relation, target)
 				if err != nil {
-					return stacktrace.Propagate(err, "")
+					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
 				return rel
 			case fsm.MethodNodeDelRelation:
@@ -112,11 +113,11 @@ func (d *DB) FSM() raft.FSM {
 				key := cmd.Key
 				source, err := d.GetNode(sourceType, sourceID)
 				if err != nil {
-					return stacktrace.Propagate(err, "")
+					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
 				err = source.DelRelationship(key.Type, key.ID)
 				if err != nil {
-					return stacktrace.Propagate(err, "")
+					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
 				return true
 			case fsm.MethodRelationSetProperties:
@@ -130,10 +131,10 @@ func (d *DB) FSM() raft.FSM {
 				props := cmd.Properties
 				rel, err := d.GetRelationship(sourceType, sourceID)
 				if err != nil {
-					return stacktrace.Propagate(err, "")
+					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
 				if err := rel.SetProperties(props); err != nil {
-					return stacktrace.Propagate(err, "")
+					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
 				return rel
 			default:

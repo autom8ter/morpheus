@@ -41,7 +41,7 @@ var serveCmd = &cobra.Command{
 				},
 			}}
 		}
-		g, err := persistence.New(fmt.Sprintf("%s/storage", cfg.Database.StoragePath))
+		g, err := persistence.New(fmt.Sprintf("%s/storage", cfg.Database.StoragePath), false)
 		if err != nil {
 			panic(err)
 		}
