@@ -56,7 +56,7 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 
 	joinRaft := cfg.Server.RaftCluster
 	rft, err := raft.NewRaft(
-		g,
+		g.FSM(),
 		tcplis,
 		raft.WithRaftDir(fmt.Sprintf("%s/raft", cfg.Database.StoragePath)),
 		raft.WithIsLeader(joinRaft == ""),

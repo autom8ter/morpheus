@@ -1,5 +1,10 @@
 package api
 
+import (
+	"github.com/autom8ter/morpheus/pkg/graph/model"
+	"github.com/hashicorp/raft"
+)
+
 type Direction string
 
 const (
@@ -19,37 +24,37 @@ func (d Direction) Opposite() Direction {
 type Entity interface {
 	ID() string
 	Type() string
-	Properties() map[string]interface{}
-	GetProperty(name string) interface{}
-	SetProperties(properties map[string]interface{})
-	DelProperty(name string)
+	Properties() (map[string]interface{}, error)
+	GetProperty(name string) (interface{}, error)
+	SetProperties(properties map[string]interface{}) error
+	DelProperty(name string) error
 }
 
 type Node interface {
 	Entity
-	AddRelationship(relationship string, node Node) Relationship
-	DelRelationship(relationship string, id string)
-	GetRelationship(relation, id string) (Relationship, bool)
-	Relationships(skip int, relation string, targetType string, fn func(relationship Relationship) bool)
+	AddRelationship(relationship string, node Node) (Relationship, error)
+	DelRelationship(relationship string, id string) error
+	GetRelationship(relation, id string) (Relationship, bool, error)
+	Relationships(where *model.RelationWhere) (string, []Relationship, error)
 }
 
 type Relationship interface {
 	Entity
-	Source() Node
-	Target() Node
+	Source() (Node, error)
+	Target() (Node, error)
 }
 
 type Graph interface {
 	GetNode(typee string, id string) (Node, error)
 	AddNode(typee string, id string, properties map[string]interface{}) (Node, error)
 	DelNode(typee string, id string) error
-	RangeNodes(skip int, typee string, fn func(node Node) bool) error
+	RangeNodes(where *model.NodeWhere) (string, []Node, error)
 	NodeTypes() []string
 
 	GetRelationship(relation string, id string) (Relationship, error)
-	RangeRelationships(skip int, relation string, fn func(node Relationship) bool) error
+	RangeRelationships(where *model.RelationWhere) (string, []Relationship, error)
 	RelationshipTypes() []string
 
-	Size() int
 	Close() error
+	FSM() raft.FSM
 }

@@ -1,11 +1,14 @@
 package persistence
 
 import (
-	"fmt"
 	"github.com/autom8ter/morpheus/pkg/api"
+	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/encode"
+	"github.com/autom8ter/morpheus/pkg/graph/model"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/palantir/stacktrace"
+	"github.com/spf13/cast"
+	"sort"
 	"strings"
 )
 
@@ -24,14 +27,14 @@ func (n Node) ID() string {
 	return n.nodeID
 }
 
-func (n Node) Properties() map[string]interface{} {
+func (n Node) Properties() (map[string]interface{}, error) {
 	data := map[string]interface{}{}
 	if n.item != nil {
 		if err := encode.Unmarshal(n.item, &data); err != nil {
-			panic(stacktrace.Propagate(err, ""))
+			return nil, stacktrace.Propagate(err, "")
 		}
 		n.item = nil
-		return data
+		return data, nil
 	}
 	if err := n.db.db.View(func(txn *badger.Txn) error {
 		var key = getNodePath(n.nodeType, n.nodeID)
@@ -46,40 +49,44 @@ func (n Node) Properties() map[string]interface{} {
 		}
 		return nil
 	}); err != nil {
-		panic(err)
+		return nil, stacktrace.Propagate(err, "")
 	}
 
-	return data
+	return data, nil
 }
 
-func (n Node) GetProperty(name string) interface{} {
-	all := n.Properties()
-	if all == nil {
-		return nil
-	}
-	return all[name]
-}
-
-func (n Node) SetProperties(properties map[string]interface{}) {
-	bits, err := encode.Marshal(properties)
+func (n Node) GetProperty(name string) (interface{}, error) {
+	all, err := n.Properties()
 	if err != nil {
-		panic(stacktrace.Propagate(err, ""))
+		return nil, stacktrace.Propagate(err, "")
 	}
-	var key = getNodePath(n.nodeType, n.nodeID)
-	if err := n.db.db.Update(func(txn *badger.Txn) error {
-		return txn.Set(key, bits)
-	}); err != nil {
-		panic(stacktrace.Propagate(err, ""))
+	if all == nil {
+		return nil, stacktrace.Propagate(constants.ErrNotFound, "")
 	}
+	return all[name], nil
 }
 
-func (n Node) DelProperty(name string) {
-	all := n.Properties()
+func (n Node) SetProperties(properties map[string]interface{}) error {
+	_, err := n.db.AddNode(n.nodeType, n.nodeID, properties)
+	if err != nil {
+		return stacktrace.Propagate(err, "")
+	}
+	return nil
+}
+
+func (n Node) DelProperty(name string) error {
+	all, err := n.Properties()
+	if err != nil {
+		return stacktrace.Propagate(err, "")
+	}
 	delete(all, name)
-	n.SetProperties(all)
+	if err := n.SetProperties(all); err != nil {
+		return stacktrace.Propagate(err, "")
+	}
+	return nil
 }
 
-func (n Node) AddRelationship(relationship string, node api.Node) api.Relationship {
+func (n Node) AddRelationship(relationship string, node api.Node) (api.Relationship, error) {
 	relID := getRelationID(n.Type(), n.ID(), relationship, node.Type(), node.ID())
 	n.db.relationshipTypes.Store(relationship, struct{}{})
 	rkey := getRelationshipPath(relationship, relID)
@@ -98,7 +105,7 @@ func (n Node) AddRelationship(relationship string, node api.Node) api.Relationsh
 
 	bits, err := encode.Marshal(values)
 	if err != nil {
-		panic(err)
+		return nil, stacktrace.Propagate(err, "")
 	}
 	if err := n.db.db.Update(func(txn *badger.Txn) error {
 		if err := txn.Set(rkey, bits); err != nil {
@@ -110,27 +117,41 @@ func (n Node) AddRelationship(relationship string, node api.Node) api.Relationsh
 		if err := txn.Set(target, bits); err != nil {
 			return stacktrace.Propagate(err, "")
 		}
+		for k, v := range values {
+			n.db.relationshipFieldMap.Store(strings.Join([]string{relationship, k}, ","), struct{}{})
+			key := getRelationshipFieldPath(relationship, k, v, relID)
+			if err := txn.Set(key, bits); err != nil {
+				return stacktrace.Propagate(err, "")
+			}
+		}
 		return nil
 	}); err != nil {
-		panic(err)
+		return nil, stacktrace.Propagate(err, "")
 	}
 	return &Relationship{
 		relationshipType: relationship,
 		relationshipID:   relID,
 		item:             bits,
 		db:               n.db,
-	}
+	}, nil
 }
 
-func (n Node) DelRelationship(relationship string, id string) {
-	rel, ok := n.GetRelationship(relationship, id)
-	if !ok {
-		return
+func (n Node) DelRelationship(relationship string, id string) error {
+	rel, ok, err := n.GetRelationship(relationship, id)
+	if err != nil {
+		return stacktrace.Propagate(err, "")
 	}
-	rkey := getRelationshipPath(rel.Type(), rel.ID())
-	source := getNodeRelationshipPath(n.Type(), n.ID(), api.Outgoing, relationship, rel.Target().Type(), rel.Target().ID(), rel.ID())
-	target := getNodeRelationshipPath(rel.Target().Type(), rel.Target().ID(), api.Incoming, relationship, n.Type(), n.ID(), rel.ID())
+	if !ok {
+		return nil
+	}
+	targetNode, err := rel.Target()
+	if err != nil {
+		return stacktrace.Propagate(err, "")
+	}
 
+	rkey := getRelationshipPath(rel.Type(), rel.ID())
+	source := getNodeRelationshipPath(n.Type(), n.ID(), api.Outgoing, relationship, targetNode.Type(), targetNode.ID(), rel.ID())
+	target := getNodeRelationshipPath(targetNode.Type(), targetNode.ID(), api.Incoming, relationship, n.Type(), n.ID(), rel.ID())
 	if err := n.db.db.Update(func(txn *badger.Txn) error {
 		if err := txn.Delete(rkey); err != nil {
 			return stacktrace.Propagate(err, "")
@@ -141,13 +162,29 @@ func (n Node) DelRelationship(relationship string, id string) {
 		if err := txn.Delete(target); err != nil {
 			return stacktrace.Propagate(err, "")
 		}
+		props, err := rel.Properties()
+		if err != nil {
+			return stacktrace.Propagate(err, "")
+		}
+		if err := n.db.db.View(func(txn *badger.Txn) error {
+			for k, v := range props {
+				key := getRelationshipFieldPath(rel.Type(), k, v, rel.ID())
+				if err := txn.Delete(key); err != nil {
+					return stacktrace.Propagate(err, "")
+				}
+			}
+			return nil
+		}); err != nil {
+			return stacktrace.Propagate(err, "")
+		}
 		return nil
 	}); err != nil {
-		panic(err)
+		return stacktrace.Propagate(err, "")
 	}
+	return nil
 }
 
-func (n Node) GetRelationship(relation, id string) (api.Relationship, bool) {
+func (n Node) GetRelationship(relation, id string) (api.Relationship, bool, error) {
 	rkey := getRelationshipPath(relation, id)
 	rel := &Relationship{
 		relationshipType: relation,
@@ -168,33 +205,52 @@ func (n Node) GetRelationship(relation, id string) (api.Relationship, bool) {
 		}
 		return nil
 	}); err != nil {
-		panic(err)
+		return nil, false, stacktrace.Propagate(err, "")
 	}
 	if rel.item == nil {
-		return nil, false
+		return nil, false, stacktrace.Propagate(constants.ErrNotFound, "")
 	}
-	return rel, true
+	return rel, true, nil
 }
 
-func (n Node) Relationships(skip int, relation string, targetType string, fn func(relationship api.Relationship) bool) {
-	source := getNodeRelationshipPrefix(n.Type(), n.ID(), api.Outgoing, relation, targetType)
-	fmt.Println(string(source))
+func (n Node) Relationships(where *model.RelationWhere) (string, []api.Relationship, error) {
+	source := getNodeRelationshipPrefix(n.Type(), n.ID(), api.Outgoing, where.Relation, where.TargetType)
 	// Iterate over 1000 items
-	var skipped int
+	var (
+		skipped int
+		skip    int
+		rels    []api.Relationship
+		err     error
+	)
+	if where.Cursor != nil {
+		skip, err = parseCursor(*where.Cursor)
+		if err != nil {
+			return "", nil, stacktrace.Propagate(err, "")
+		}
+	}
+
 	if err := n.db.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
-		opt.PrefetchSize = 10
+		opt.PrefetchSize = prefetchSize
 		it := txn.NewIterator(opt)
 		defer it.Close()
+
+		if where.PageSize == nil {
+			defaultSize := prefetchSize
+			where.PageSize = &defaultSize
+		}
 		for it.Seek(source); it.ValidForPrefix(source); it.Next() {
-			if skipped < skip {
-				skip++
+			if len(rels) >= *where.PageSize {
+				break
+			}
+			if skipped <= skip {
+				skipped++
 				continue
 			}
 			item := it.Item()
 			split := strings.Split(string(item.Key()), ",")
 			rel := &Relationship{
-				relationshipType: relation,
+				relationshipType: where.Relation,
 				relationshipID:   split[len(split)-1],
 				item:             nil,
 				db:               n.db,
@@ -205,14 +261,68 @@ func (n Node) Relationships(skip int, relation string, targetType string, fn fun
 			}); err != nil {
 				return stacktrace.Propagate(err, "")
 			}
+
 			if rel.item != nil {
-				if !fn(rel) {
-					break
+				passed := true
+				for _, exp := range where.Expressions {
+					passed, err = eval(exp, rel)
+					if err != nil {
+						return stacktrace.Propagate(err, "")
+					}
+					if !passed {
+						break
+					}
+				}
+				if passed {
+					rels = append(rels, rel)
 				}
 			}
 		}
 		return nil
 	}); err != nil {
-		panic(err)
+		return "", nil, stacktrace.Propagate(err, "")
 	}
+	if len(rels) > 0 {
+		if where.OrderBy == nil {
+			sort.Slice(rels, func(i, j int) bool {
+				return rels[i].ID() < rels[j].ID()
+			})
+		} else {
+			sort.Slice(rels, func(i, j int) bool {
+				switch where.OrderBy.Field {
+				case "type":
+					if where != nil && where.OrderBy.Reverse != nil && *where.OrderBy.Reverse {
+						return rels[i].Type() > rels[j].Type()
+					}
+					return rels[i].Type() < rels[j].Type()
+				default:
+					iprops, err := rels[i].Properties()
+					if err != nil {
+						return true
+					}
+					if iprops[where.OrderBy.Field] == nil {
+						return true
+					}
+					jprops, err := rels[j].Properties()
+					if err != nil {
+						return false
+					}
+					if jprops[where.OrderBy.Field] == nil {
+						return true
+					}
+					if where.OrderBy.Reverse != nil && *where.OrderBy.Reverse {
+						if val, err := cast.ToFloat64E(iprops[where.OrderBy.Field]); err == nil {
+							return val > cast.ToFloat64(jprops[where.OrderBy.Field])
+						}
+						return cast.ToString(iprops[where.OrderBy.Field]) < cast.ToString(jprops[where.OrderBy.Field])
+					}
+					if val, err := cast.ToFloat64E(iprops[where.OrderBy.Field]); err == nil {
+						return val < cast.ToFloat64(jprops[where.OrderBy.Field])
+					}
+					return cast.ToString(iprops[where.OrderBy.Field]) < cast.ToString(jprops[where.OrderBy.Field])
+				}
+			})
+		}
+	}
+	return createCursor(skipped + skip), rels, nil
 }

@@ -64,6 +64,7 @@ type OrderBy struct {
 
 type RelationWhere struct {
 	Cursor      *string       `json:"cursor"`
+	Direction   Direction     `json:"direction"`
 	Relation    string        `json:"relation"`
 	TargetType  string        `json:"target_type"`
 	Expressions []*Expression `json:"expressions"`

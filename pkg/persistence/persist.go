@@ -4,6 +4,7 @@ import (
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/constants"
 	"github.com/autom8ter/morpheus/pkg/encode"
+	"github.com/autom8ter/morpheus/pkg/graph/model"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/palantir/stacktrace"
 	"sort"
@@ -12,22 +13,26 @@ import (
 )
 
 type DB struct {
-	dir               string
-	db                *badger.DB
-	nodeTypes         sync.Map
-	relationshipTypes sync.Map
+	dir                  string
+	db                   *badger.DB
+	nodeTypes            sync.Map
+	nodeFieldMap         sync.Map
+	relationshipTypes    sync.Map
+	relationshipFieldMap sync.Map
 }
 
-func New(dir string) (*DB, error) {
+func New(dir string) (api.Graph, error) {
 	db, err := badger.Open(badger.DefaultOptions(dir).WithLogger(bLogger{}))
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to create database storage")
 	}
 	return &DB{
-		dir:               dir,
-		db:                db,
-		nodeTypes:         sync.Map{},
-		relationshipTypes: sync.Map{},
+		dir:                  dir,
+		db:                   db,
+		nodeTypes:            sync.Map{},
+		nodeFieldMap:         sync.Map{},
+		relationshipTypes:    sync.Map{},
+		relationshipFieldMap: sync.Map{},
 	}, nil
 }
 
@@ -73,9 +78,19 @@ func (d *DB) AddNode(nodeType, nodeID string, properties map[string]interface{})
 		return nil, stacktrace.Propagate(err, "")
 	}
 	if err := d.db.Update(func(txn *badger.Txn) error {
-		return txn.Set(key, bits)
+		if err := txn.Set(key, bits); err != nil {
+			return stacktrace.Propagate(err, "")
+		}
+		for k, v := range properties {
+			d.nodeTypes.Store(strings.Join([]string{nodeType, k}, ","), struct{}{})
+			key := getNodeTypeFieldPath(nodeType, k, v, nodeID)
+			if err := txn.Set(key, bits); err != nil {
+				return stacktrace.Propagate(err, "")
+			}
+		}
+		return nil
 	}); err != nil {
-		return nil, stacktrace.Propagate(err, "")
+		return nil, err
 	}
 	return &Node{
 		nodeType: nodeType,
@@ -94,36 +109,72 @@ func (d *DB) DelNode(nodeType, nodeID string) error {
 	return nil
 }
 
-func (d *DB) RangeNodes(skip int, nodeType string, fn func(node api.Node) bool) error {
+func (d *DB) RangeNodes(where *model.NodeWhere) (string, []api.Node, error) {
+	if where.PageSize == nil {
+		pageSize := 25
+		where.PageSize = &pageSize
+	}
+	var (
+		skipped int
+		skip    int
+		nodes   []api.Node
+		err     error
+	)
+	key := getNodePath(where.Type, "")
+	if where.Cursor != nil {
+		skip, err = parseCursor(*where.Cursor)
+		if err != nil {
+			return "", nil, stacktrace.Propagate(err, "")
+		}
+	}
 
-	var skipped int
-	key := getNodePath(nodeType, "")
 	if err := d.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
-		opt.PrefetchSize = 10
+		opt.PrefetchSize = prefetchSize
 		it := txn.NewIterator(opt)
 		defer it.Close()
 		for it.Seek(key); it.ValidForPrefix(key); it.Next() {
-			if skipped < skip {
-				skip++
+			if len(nodes) >= *where.PageSize {
+				return nil
+			}
+			if skipped <= skip {
+				skipped++
 				continue
 			}
 			item := it.Item()
-			key := item.KeyCopy(nil)
-			split := strings.Split(string(key), ",")
-			if !fn(&Node{
-				nodeType: nodeType,
+			split := strings.Split(string(item.Key()), ",")
+			node := &Node{
+				nodeType: where.Type,
 				nodeID:   split[len(split)-1],
 				db:       d,
-			}) {
-				break
+			}
+			if err := item.Value(func(val []byte) error {
+				node.item = val
+				return nil
+			}); err != nil {
+				return stacktrace.Propagate(err, "")
+			}
+			if node.item != nil {
+				passed := true
+				for _, exp := range where.Expressions {
+					passed, err = eval(exp, node)
+					if err != nil {
+						return stacktrace.Propagate(err, "")
+					}
+					if !passed {
+						break
+					}
+				}
+				if passed {
+					nodes = append(nodes, node)
+				}
 			}
 		}
 		return nil
 	}); err != nil {
-		panic(err)
+		return "", nil, err
 	}
-	return nil
+	return createCursor(skip + skipped), nodes, nil
 }
 
 func (d *DB) NodeTypes() []string {
@@ -166,34 +217,75 @@ func (d *DB) GetRelationship(relation string, id string) (api.Relationship, erro
 	return r, nil
 }
 
-func (d *DB) RangeRelationships(skip int, relation string, fn func(node api.Relationship) bool) error {
-	source := getRelationshipPath(relation, "")
-	var skipped int
+func (d *DB) RangeRelationships(where *model.RelationWhere) (string, []api.Relationship, error) {
+	if where.PageSize == nil {
+		pageSize := prefetchSize
+		where.PageSize = &pageSize
+	}
+	var (
+		err     error
+		skipped int
+		skip    int
+		rels    []api.Relationship
+	)
+
+	skip, err = parseCursor(*where.Cursor)
+	if err != nil {
+		return "", nil, stacktrace.Propagate(err, "")
+	}
+
 	if err := d.db.View(func(txn *badger.Txn) error {
+
+		key := getRelationshipPath(where.Relation, "")
+
 		opt := badger.DefaultIteratorOptions
-		opt.PrefetchSize = 10
+		opt.PrefetchSize = prefetchSize
 		it := txn.NewIterator(opt)
+
 		defer it.Close()
-		for it.Seek(source); it.ValidForPrefix(source); it.Next() {
-			if skipped < skip {
-				skip++
+		for it.Seek(key); it.ValidForPrefix(key); it.Next() {
+			if len(rels) >= *where.PageSize {
+				return nil
+			}
+			if skipped <= skip {
+				skipped++
 				continue
 			}
 			item := it.Item()
 			split := strings.Split(string(item.Key()), ",")
-			if !fn(&Relationship{
-				relationshipType: relation,
+			rel := &Relationship{
+				relationshipType: where.Relation,
 				relationshipID:   split[len(split)-1],
+				item:             nil,
 				db:               d,
-			}) {
-				break
+			}
+			if err := item.Value(func(val []byte) error {
+				rel.item = val
+				return nil
+			}); err != nil {
+				return stacktrace.Propagate(err, "")
+			}
+			if rel.item != nil {
+				passed := true
+				for _, exp := range where.Expressions {
+					passed, err = eval(exp, rel)
+					if err != nil {
+						return stacktrace.Propagate(err, "")
+					}
+					if !passed {
+						break
+					}
+				}
+				if passed {
+					rels = append(rels, rel)
+				}
 			}
 		}
 		return nil
 	}); err != nil {
-		panic(err)
+		return "", rels, err
 	}
-	return nil
+	return createCursor(skip + skipped), rels, nil
 }
 
 func (d *DB) RelationshipTypes() []string {
@@ -204,19 +296,6 @@ func (d *DB) RelationshipTypes() []string {
 	})
 	sort.Strings(types)
 	return types
-}
-
-func (d *DB) Size() int {
-	count := 0
-	for _, t := range d.NodeTypes() {
-		if err := d.RangeNodes(0, t, func(node api.Node) bool {
-			count++
-			return true
-		}); err != nil {
-			panic(stacktrace.Propagate(err, ""))
-		}
-	}
-	return count
 }
 
 func (d *DB) Close() error {

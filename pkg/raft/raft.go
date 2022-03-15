@@ -4,8 +4,6 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"github.com/autom8ter/morpheus/pkg/api"
-	fsm2 "github.com/autom8ter/morpheus/pkg/raft/fsm"
 	"github.com/autom8ter/morpheus/pkg/raft/storage"
 	transport2 "github.com/autom8ter/morpheus/pkg/raft/transport"
 	"github.com/hashicorp/raft"
@@ -20,9 +18,7 @@ type Raft struct {
 	opts *Options
 }
 
-func NewRaft(g api.Graph, lis net.Listener, opts ...Opt) (*Raft, error) {
-	fsm := fsm2.NewGraphFSM(g)
-
+func NewRaft(fsm raft.FSM, lis net.Listener, opts ...Opt) (*Raft, error) {
 	options := &Options{}
 	for _, o := range opts {
 		o(options)

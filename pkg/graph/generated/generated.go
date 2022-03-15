@@ -73,7 +73,6 @@ type ComplexityRoot struct {
 		List    func(childComplexity int, where model.NodeWhere) int
 		Login   func(childComplexity int, username string, password string) int
 		Set     func(childComplexity int, set model.SetNode) int
-		Size    func(childComplexity int) int
 		Types   func(childComplexity int) int
 	}
 
@@ -108,7 +107,6 @@ type QueryResolver interface {
 	Types(ctx context.Context) ([]string, error)
 	Get(ctx context.Context, key model.Key) (*model.Node, error)
 	List(ctx context.Context, where model.NodeWhere) (*model.Nodes, error)
-	Size(ctx context.Context) (int, error)
 	Add(ctx context.Context, add model.AddNode) (*model.Node, error)
 	Set(ctx context.Context, set model.SetNode) (*model.Node, error)
 	Del(ctx context.Context, del model.Key) (bool, error)
@@ -365,13 +363,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.Set(childComplexity, args["set"].(model.SetNode)), true
 
-	case "Query.size":
-		if e.complexity.Query.Size == nil {
-			break
-		}
-
-		return e.complexity.Query.Size(childComplexity), true
-
 	case "Query.types":
 		if e.complexity.Query.Types == nil {
 			break
@@ -518,7 +509,6 @@ var sources = []*ast.Source{
 
 scalar Any
 
-
 input Key {
     type: String!
     id: String!
@@ -552,6 +542,7 @@ input NodeWhere {
 
 input RelationWhere {
     cursor: String
+    direction: Direction!
     relation: String!
     target_type: String!
     expressions: [Expression!]
@@ -628,7 +619,6 @@ type Query {
     types: [String!]
     get(key: Key!): Node!
     list(where: NodeWhere!): Nodes!
-    size: Int!
 
     add(add: AddNode!): Node!
     set(set: SetNode!): Node!
@@ -1590,41 +1580,6 @@ func (ec *executionContext) _Query_list(ctx context.Context, field graphql.Colle
 	res := resTmp.(*model.Nodes)
 	fc.Result = res
 	return ec.marshalNNodes2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodes(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_size(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Size(rctx)
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(int)
-	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_add(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -3755,6 +3710,14 @@ func (ec *executionContext) unmarshalInputRelationWhere(ctx context.Context, obj
 			if err != nil {
 				return it, err
 			}
+		case "direction":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
+			it.Direction, err = ec.unmarshalNDirection2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx, v)
+			if err != nil {
+				return it, err
+			}
 		case "relation":
 			var err error
 
@@ -4169,29 +4132,6 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_list(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
-			}
-
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
-		case "size":
-			field := field
-
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_size(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -5026,24 +4966,19 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) unmarshalNExpression2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐExpression(ctx context.Context, v interface{}) (*model.Expression, error) {
-	res, err := ec.unmarshalInputExpression(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v interface{}) (int, error) {
-	res, err := graphql.UnmarshalInt(v)
+func (ec *executionContext) unmarshalNDirection2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx context.Context, v interface{}) (model.Direction, error) {
+	var res model.Direction
+	err := res.UnmarshalGQL(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.SelectionSet, v int) graphql.Marshaler {
-	res := graphql.MarshalInt(v)
-	if res == graphql.Null {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "must not be null")
-		}
-	}
-	return res
+func (ec *executionContext) marshalNDirection2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx context.Context, sel ast.SelectionSet, v model.Direction) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) unmarshalNExpression2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐExpression(ctx context.Context, v interface{}) (*model.Expression, error) {
+	res, err := ec.unmarshalInputExpression(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx context.Context, v interface{}) (model.Key, error) {

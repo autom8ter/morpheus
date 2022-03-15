@@ -2,7 +2,6 @@ scalar Map
 
 scalar Any
 
-
 input Key {
     type: String!
     id: String!
@@ -36,6 +35,7 @@ input NodeWhere {
 
 input RelationWhere {
     cursor: String
+    direction: Direction!
     relation: String!
     target_type: String!
     expressions: [Expression!]
@@ -112,7 +112,6 @@ type Query {
     types: [String!]
     get(key: Key!): Node!
     list(where: NodeWhere!): Nodes!
-    size: Int!
 
     add(add: AddNode!): Node!
     set(set: SetNode!): Node!

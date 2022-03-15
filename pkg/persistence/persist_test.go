@@ -2,56 +2,52 @@ package persistence
 
 import (
 	"encoding/json"
-	"github.com/autom8ter/morpheus/pkg/api"
-	"io/ioutil"
-	"os"
-	"reflect"
-	"testing"
 )
 
-func Test(t *testing.T) {
-	dir, err := ioutil.TempDir("", "badger-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	g, err := New(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	coleman, err := g.AddNode("user", "colemanword@gmail.com", map[string]interface{}{
-		"name": "Coleman Word",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	choozle, err := g.AddNode("business", "www.choozle.com", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	coleman.AddRelationship("works_at", choozle)
-
-	found := false
-	coleman.Relationships(0, "works_at", "business", func(relationship api.Relationship) bool {
-		found = true
-		t.Logf("relationships - %s %s %s", coleman.GetProperty("name"), relationship.Type(), relationship.Target().ID())
-		return true
-	})
-	if !found {
-		t.Fatal("failed to find relationship")
-	}
-
-	{
-		c, err := g.GetNode("user", "colemanword@gmail.com")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(coleman.Properties(), c.Properties()) {
-			t.Fatal("not equal", jsonString(coleman.Properties()), jsonString(c.Properties()))
-		}
-	}
-	t.Log(g.NodeTypes())
-}
+//
+//func Test(t *testing.T) {
+//	dir, err := ioutil.TempDir("", "badger-test")
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	defer os.RemoveAll(dir)
+//	g, err := New(dir)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	coleman, err := g.AddNode("user", "colemanword@gmail.com", map[string]interface{}{
+//		"name": "Coleman Word",
+//	})
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	choozle, err := g.AddNode("business", "www.choozle.com", nil)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	coleman.AddRelationship("works_at", choozle)
+//
+//	found := false
+//	coleman.Relationships(0, "works_at", "business", func(relationship api.Relationship) bool {
+//		found = true
+//		t.Logf("relationships - %s %s %s", coleman.GetProperty("name"), relationship.Type(), relationship.Target().ID())
+//		return true
+//	})
+//	if !found {
+//		t.Fatal("failed to find relationship")
+//	}
+//
+//	{
+//		c, err := g.GetNode("user", "colemanword@gmail.com")
+//		if err != nil {
+//			t.Fatal(err)
+//		}
+//		if !reflect.DeepEqual(coleman.Properties(), c.Properties()) {
+//			t.Fatal("not equal", jsonString(coleman.Properties()), jsonString(c.Properties()))
+//		}
+//	}
+//	t.Log(g.NodeTypes())
+//}
 
 /*
 go test  -bench=Benchmark . -benchmem -run=^$
