@@ -46,6 +46,8 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	Node struct {
+		AddIncomingNode func(childComplexity int, relation string, addNode model.AddNode) int
+		AddOutboundNode func(childComplexity int, relation string, addNode model.AddNode) int
 		AddRelationship func(childComplexity int, relationship string, nodeKey model.Key) int
 		DelProperty     func(childComplexity int, key string) int
 		DelRelationship func(childComplexity int, key model.Key) int
@@ -102,6 +104,8 @@ type NodeResolver interface {
 	AddRelationship(ctx context.Context, obj *model.Node, relationship string, nodeKey model.Key) (*model.Relationship, error)
 	DelRelationship(ctx context.Context, obj *model.Node, key model.Key) (bool, error)
 	Relationships(ctx context.Context, obj *model.Node, where model.RelationWhere) (*model.Relationships, error)
+	AddIncomingNode(ctx context.Context, obj *model.Node, relation string, addNode model.AddNode) (*model.Node, error)
+	AddOutboundNode(ctx context.Context, obj *model.Node, relation string, addNode model.AddNode) (*model.Node, error)
 }
 type QueryResolver interface {
 	Types(ctx context.Context) ([]string, error)
@@ -135,6 +139,30 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 	ec := executionContext{nil, e}
 	_ = ec
 	switch typeName + "." + field {
+
+	case "Node.addIncomingNode":
+		if e.complexity.Node.AddIncomingNode == nil {
+			break
+		}
+
+		args, err := ec.field_Node_addIncomingNode_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Node.AddIncomingNode(childComplexity, args["relation"].(string), args["addNode"].(model.AddNode)), true
+
+	case "Node.addOutboundNode":
+		if e.complexity.Node.AddOutboundNode == nil {
+			break
+		}
+
+		args, err := ec.field_Node_addOutboundNode_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Node.AddOutboundNode(childComplexity, args["relation"].(string), args["addNode"].(model.AddNode)), true
 
 	case "Node.addRelationship":
 		if e.complexity.Node.AddRelationship == nil {
@@ -580,6 +608,8 @@ type Node implements Entity {
     addRelationship(relationship: String!, nodeKey: Key!): Relationship!
     delRelationship(key: Key!): Boolean!
     relationships(where: RelationWhere!): Relationships!
+    addIncomingNode(relation: String!, addNode: AddNode!): Node!
+    addOutboundNode(relation: String!, addNode: AddNode!): Node!
 }
 
 type Relationship implements Entity {
@@ -637,6 +667,54 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // endregion ************************** generated!.gotpl **************************
 
 // region    ***************************** args.gotpl *****************************
+
+func (ec *executionContext) field_Node_addIncomingNode_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["relation"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relation"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["relation"] = arg0
+	var arg1 model.AddNode
+	if tmp, ok := rawArgs["addNode"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addNode"))
+		arg1, err = ec.unmarshalNAddNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["addNode"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Node_addOutboundNode_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["relation"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relation"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["relation"] = arg0
+	var arg1 model.AddNode
+	if tmp, ok := rawArgs["addNode"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addNode"))
+		arg1, err = ec.unmarshalNAddNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["addNode"] = arg1
+	return args, nil
+}
 
 func (ec *executionContext) field_Node_addRelationship_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
@@ -1397,6 +1475,90 @@ func (ec *executionContext) _Node_relationships(ctx context.Context, field graph
 	res := resTmp.(*model.Relationships)
 	fc.Result = res
 	return ec.marshalNRelationships2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationships(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Node_addIncomingNode(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Node",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Node_addIncomingNode_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Node().AddIncomingNode(rctx, obj, args["relation"].(string), args["addNode"].(model.AddNode))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Node)
+	fc.Result = res
+	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Node_addOutboundNode(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Node",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Node_addOutboundNode_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Node().AddOutboundNode(rctx, obj, args["relation"].(string), args["addNode"].(model.AddNode))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Node)
+	fc.Result = res
+	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Nodes_cursor(ctx context.Context, field graphql.CollectedField, obj *model.Nodes) (ret graphql.Marshaler) {
@@ -4001,6 +4163,46 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 					}
 				}()
 				res = ec._Node_relationships(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		case "addIncomingNode":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Node_addIncomingNode(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
+		case "addOutboundNode":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Node_addOutboundNode(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}

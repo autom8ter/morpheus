@@ -40,6 +40,8 @@ type Node struct {
 	AddRelationship *Relationship          `json:"addRelationship"`
 	DelRelationship bool                   `json:"delRelationship"`
 	Relationships   *Relationships         `json:"relationships"`
+	AddIncomingNode *Node                  `json:"addIncomingNode"`
+	AddOutboundNode *Node                  `json:"addOutboundNode"`
 }
 
 func (Node) IsEntity() {}

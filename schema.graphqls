@@ -73,6 +73,8 @@ type Node implements Entity {
     addRelationship(relationship: String!, nodeKey: Key!): Relationship!
     delRelationship(key: Key!): Boolean!
     relationships(where: RelationWhere!): Relationships!
+    addIncomingNode(relation: String!, addNode: AddNode!): Node!
+    addOutboundNode(relation: String!, addNode: AddNode!): Node!
 }
 
 type Relationship implements Entity {

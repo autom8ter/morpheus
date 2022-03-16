@@ -6,9 +6,9 @@ package graph
 import (
 	"context"
 	"fmt"
-	"github.com/99designs/gqlgen/graphql"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/config"
 	"github.com/autom8ter/morpheus/pkg/constants"
@@ -243,6 +243,44 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where
 		Cursor: cursor,
 		Values: resp,
 	}, nil
+}
+
+func (r *nodeResolver) AddIncomingNode(ctx context.Context, obj *model.Node, relation string, addNode model.AddNode) (*model.Node, error) {
+	n, err := r.Query().Add(ctx, addNode)
+	if err != nil {
+		logger.L.Error("graphql resolver error", stacktrace.Propagate(err, ""), map[string]interface{}{
+			"node.type":     obj.Type,
+			"node.id":       obj.ID,
+			"relation.type": relation,
+		})
+		return nil, stacktrace.RootCause(err)
+	}
+	if _, err := r.Node().AddRelationship(ctx, n, relation, model.Key{
+		Type: obj.Type,
+		ID:   obj.ID,
+	}); err != nil {
+		return nil, stacktrace.RootCause(err)
+	}
+	return n, nil
+}
+
+func (r *nodeResolver) AddOutboundNode(ctx context.Context, obj *model.Node, relation string, addNode model.AddNode) (*model.Node, error) {
+	n, err := r.Query().Add(ctx, addNode)
+	if err != nil {
+		logger.L.Error("graphql resolver error", stacktrace.Propagate(err, ""), map[string]interface{}{
+			"node.type":     obj.Type,
+			"node.id":       obj.ID,
+			"relation.type": relation,
+		})
+		return nil, stacktrace.RootCause(err)
+	}
+	if _, err := r.Node().AddRelationship(ctx, obj, relation, model.Key{
+		Type: n.Type,
+		ID:   n.ID,
+	}); err != nil {
+		return nil, stacktrace.RootCause(err)
+	}
+	return n, nil
 }
 
 func (r *queryResolver) Types(ctx context.Context) ([]string, error) {

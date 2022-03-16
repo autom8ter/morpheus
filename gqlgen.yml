@@ -70,6 +70,10 @@ models:
         resolver: true
       getRelationship:
         resolver: true
+      addIncomingNode:
+        resolver: true
+      addOutboundNode:
+        resolver: true
   Relationship:
     fields:
       properties:
