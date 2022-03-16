@@ -106,7 +106,6 @@ func createCursor(skip int) string {
 }
 
 func eval(exp *model.Expression, ent api.Entity) (bool, error) {
-
 	val, err := ent.GetProperty(exp.Key)
 	if err != nil {
 		return false, err

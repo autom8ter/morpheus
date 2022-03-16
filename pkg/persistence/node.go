@@ -134,6 +134,7 @@ func (n Node) AddRelationship(relationship string, node api.Node) (api.Relations
 		item:             values,
 		db:               n.db,
 	}
+	n.db.cache.Set(string(rkey), r, 1)
 	return r, nil
 }
 
@@ -182,11 +183,16 @@ func (n Node) DelRelationship(relationship string, id string) error {
 	}); err != nil {
 		return stacktrace.Propagate(err, "")
 	}
+	n.db.cache.Del(string(rkey))
 	return nil
 }
 
 func (n Node) GetRelationship(relation, id string) (api.Relationship, bool, error) {
 	rkey := getRelationshipPath(relation, id)
+	if val, ok := n.db.cache.Get(string(rkey)); ok {
+		return val.(api.Relationship), true, nil
+	}
+
 	rel := &Relationship{
 		relationshipType: relation,
 		relationshipID:   id,
@@ -248,22 +254,20 @@ func (n Node) Relationships(where *model.RelationWhere) (string, []api.Relations
 			}
 			item := it.Item()
 			split := strings.Split(string(item.Key()), ",")
-			rel := &Relationship{
-				relationshipType: where.Relation,
-				relationshipID:   split[len(split)-1],
-				item:             nil,
-				db:               n.db,
+			var rel api.Relationship
+			cached, ok := n.db.cache.Get(string(getRelationshipPath(where.Relation, split[len(split)-1])))
+			if ok {
+				rel = cached.(api.Relationship)
+			} else {
+				rel = &Relationship{
+					relationshipType: where.Relation,
+					relationshipID:   split[len(split)-1],
+					item:             nil,
+					db:               n.db,
+				}
 			}
-			data := map[string]interface{}{}
-			if err := item.Value(func(val []byte) error {
-				return encode.Unmarshal(val, &data)
-			}); err != nil {
-				return stacktrace.Propagate(err, "")
-			}
-			rel.item = data
-
-			if len(rel.item) > 0 {
-				passed := true
+			passed := true
+			if len(where.Expressions) > 0 {
 				for _, exp := range where.Expressions {
 					passed, err = eval(exp, rel)
 					if err != nil {
@@ -273,9 +277,9 @@ func (n Node) Relationships(where *model.RelationWhere) (string, []api.Relations
 						break
 					}
 				}
-				if passed {
-					rels = append(rels, rel)
-				}
+			}
+			if passed {
+				rels = append(rels, rel)
 			}
 		}
 		return nil

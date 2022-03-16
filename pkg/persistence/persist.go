@@ -167,8 +167,6 @@ func (d *DB) RangeNodes(where *model.NodeWhere) (string, []api.Node, error) {
 			return d.rangeEQNodes(where)
 		case model.OperatorHasPrefix:
 			return d.rangeHasPrefixNodes(where)
-		default:
-			return d.rangeContainsNodes(where)
 		}
 	}
 

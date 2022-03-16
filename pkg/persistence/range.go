@@ -59,7 +59,7 @@ func (d *DB) rangeEQNodes(where *model.NodeWhere) (string, []api.Node, error) {
 				item := it.Item()
 				split := strings.Split(string(item.Key()), ",")
 				nodeID := split[len(split)-1]
-				val, ok := d.cache.Get(getNodePath(where.Type, nodeID))
+				val, ok := d.cache.Get(string(getNodePath(where.Type, nodeID)))
 				if ok {
 					n := val.(api.Node)
 					passed, err := evalFunc(n)
@@ -149,7 +149,7 @@ func (d *DB) rangeContainsNodes(where *model.NodeWhere) (string, []api.Node, err
 				item := it.Item()
 				split := strings.Split(string(item.Key()), ",")
 				nodeID := split[len(split)-1]
-				val, ok := d.cache.Get(getNodePath(where.Type, nodeID))
+				val, ok := d.cache.Get(string(getNodePath(where.Type, nodeID)))
 				if ok {
 					n := val.(api.Node)
 					passed, err := evalFunc(n)
@@ -239,7 +239,7 @@ func (d *DB) rangeHasPrefixNodes(where *model.NodeWhere) (string, []api.Node, er
 				item := it.Item()
 				split := strings.Split(string(item.Key()), ",")
 				nodeID := split[len(split)-1]
-				val, ok := d.cache.Get(getNodePath(where.Type, nodeID))
+				val, ok := d.cache.Get(string(getNodePath(where.Type, nodeID)))
 				if ok {
 					n := val.(api.Node)
 					passed, err := evalFunc(n)
