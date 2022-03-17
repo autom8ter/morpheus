@@ -102,7 +102,7 @@ func (d *DB) FSM() raft.FSM {
 				if err != nil {
 					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
-				rel, err := source.AddRelationship(relation, api.Direction(direction), cmd.Properties, target)
+				rel, err := source.AddRelationship(api.Direction(direction), relation, cmd.Properties, target)
 				if err != nil {
 					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}

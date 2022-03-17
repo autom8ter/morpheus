@@ -274,7 +274,7 @@ func (r *nodeResolver) AddIncomingNode(ctx context.Context, obj *model.Node, rel
 	return n, nil
 }
 
-func (r *nodeResolver) AddOutboundNode(ctx context.Context, obj *model.Node, relation string,  properties map[string]interface{}, addNode model.AddNode) (*model.Node, error) {
+func (r *nodeResolver) AddOutboundNode(ctx context.Context, obj *model.Node, relation string, properties map[string]interface{}, addNode model.AddNode) (*model.Node, error) {
 	n, err := r.Query().Add(ctx, addNode)
 	if err != nil {
 		logger.L.Error("graphql resolver error", stacktrace.Propagate(err, ""), map[string]interface{}{
