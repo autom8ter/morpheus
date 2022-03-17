@@ -254,7 +254,7 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where
 	}, nil
 }
 
-func (r *nodeResolver) AddIncomingNode(ctx context.Context, obj *model.Node, relation string, direction *model.Direction, properties map[string]interface{}, addNode model.AddNode) (*model.Node, error) {
+func (r *nodeResolver) AddIncomingNode(ctx context.Context, obj *model.Node, relation string, properties map[string]interface{}, addNode model.AddNode) (*model.Node, error) {
 	n, err := r.Query().Add(ctx, addNode)
 	if err != nil {
 		logger.L.Error("graphql resolver error", stacktrace.Propagate(err, ""), map[string]interface{}{
@@ -264,7 +264,8 @@ func (r *nodeResolver) AddIncomingNode(ctx context.Context, obj *model.Node, rel
 		})
 		return nil, stacktrace.RootCause(err)
 	}
-	if _, err := r.Node().AddRelationship(ctx, n, direction, relation, properties, model.Key{
+	direction := model.DirectionIncoming
+	if _, err := r.Node().AddRelationship(ctx, n, &direction, relation, properties, model.Key{
 		Type: obj.Type,
 		ID:   obj.ID,
 	}); err != nil {
@@ -273,7 +274,7 @@ func (r *nodeResolver) AddIncomingNode(ctx context.Context, obj *model.Node, rel
 	return n, nil
 }
 
-func (r *nodeResolver) AddOutboundNode(ctx context.Context, obj *model.Node, relation string, direction *model.Direction, properties map[string]interface{}, addNode model.AddNode) (*model.Node, error) {
+func (r *nodeResolver) AddOutboundNode(ctx context.Context, obj *model.Node, relation string,  properties map[string]interface{}, addNode model.AddNode) (*model.Node, error) {
 	n, err := r.Query().Add(ctx, addNode)
 	if err != nil {
 		logger.L.Error("graphql resolver error", stacktrace.Propagate(err, ""), map[string]interface{}{
@@ -283,7 +284,8 @@ func (r *nodeResolver) AddOutboundNode(ctx context.Context, obj *model.Node, rel
 		})
 		return nil, stacktrace.RootCause(err)
 	}
-	if _, err := r.Node().AddRelationship(ctx, obj, direction, relation, properties, model.Key{
+	outgoing := model.DirectionOutgoing
+	if _, err := r.Node().AddRelationship(ctx, obj, &outgoing, relation, properties, model.Key{
 		Type: n.Type,
 		ID:   n.ID,
 	}); err != nil {
