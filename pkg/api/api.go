@@ -32,7 +32,7 @@ type Entity interface {
 
 type Node interface {
 	Entity
-	AddRelationship(relationship string, node Node) (Relationship, error)
+	AddRelationship(relationship string, direction Direction, properties map[string]interface{}, node Node) (Relationship, error)
 	DelRelationship(relationship string, id string) error
 	GetRelationship(relation, id string) (Relationship, bool, error)
 	Relationships(where *model.RelationWhere) (string, []Relationship, error)

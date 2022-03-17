@@ -136,20 +136,29 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, rel
 	return resp, nil
 }
 
-func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, relationship string, nodeKey model.Key) (*model.Relationship, error) {
+func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, direction *model.Direction, relationship string, properties map[string]interface{}, nodeKey model.Key) (*model.Relationship, error) {
 	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
 	}
+	if direction == nil {
+		outgoing := model.DirectionOutgoing
+		direction = &outgoing
+	}
+	if properties == nil {
+		properties = map[string]interface{}{}
+	}
 	cmd := &fsm.CMD{
-		Method:    fsm.MethodNodeAddRelation,
-		Key:       nodeKey,
-		Timestamp: time.Now(),
+		Method:     fsm.MethodNodeAddRelation,
+		Key:        nodeKey,
+		Properties: properties,
+		Timestamp:  time.Now(),
 		Metadata: map[string]string{
 			"source.type":  obj.Type,
 			"source.id":    obj.ID,
 			"relationship": relationship,
+			"direction":    string(*direction),
 		},
 	}
 	val, err := r.applyCMD(cmd)
@@ -245,7 +254,7 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where
 	}, nil
 }
 
-func (r *nodeResolver) AddIncomingNode(ctx context.Context, obj *model.Node, relation string, addNode model.AddNode) (*model.Node, error) {
+func (r *nodeResolver) AddIncomingNode(ctx context.Context, obj *model.Node, relation string, direction *model.Direction, properties map[string]interface{}, addNode model.AddNode) (*model.Node, error) {
 	n, err := r.Query().Add(ctx, addNode)
 	if err != nil {
 		logger.L.Error("graphql resolver error", stacktrace.Propagate(err, ""), map[string]interface{}{
@@ -255,7 +264,7 @@ func (r *nodeResolver) AddIncomingNode(ctx context.Context, obj *model.Node, rel
 		})
 		return nil, stacktrace.RootCause(err)
 	}
-	if _, err := r.Node().AddRelationship(ctx, n, relation, model.Key{
+	if _, err := r.Node().AddRelationship(ctx, n, direction, relation, properties, model.Key{
 		Type: obj.Type,
 		ID:   obj.ID,
 	}); err != nil {
@@ -264,7 +273,7 @@ func (r *nodeResolver) AddIncomingNode(ctx context.Context, obj *model.Node, rel
 	return n, nil
 }
 
-func (r *nodeResolver) AddOutboundNode(ctx context.Context, obj *model.Node, relation string, addNode model.AddNode) (*model.Node, error) {
+func (r *nodeResolver) AddOutboundNode(ctx context.Context, obj *model.Node, relation string, direction *model.Direction, properties map[string]interface{}, addNode model.AddNode) (*model.Node, error) {
 	n, err := r.Query().Add(ctx, addNode)
 	if err != nil {
 		logger.L.Error("graphql resolver error", stacktrace.Propagate(err, ""), map[string]interface{}{
@@ -274,7 +283,7 @@ func (r *nodeResolver) AddOutboundNode(ctx context.Context, obj *model.Node, rel
 		})
 		return nil, stacktrace.RootCause(err)
 	}
-	if _, err := r.Node().AddRelationship(ctx, obj, relation, model.Key{
+	if _, err := r.Node().AddRelationship(ctx, obj, direction, relation, properties, model.Key{
 		Type: n.Type,
 		ID:   n.ID,
 	}); err != nil {

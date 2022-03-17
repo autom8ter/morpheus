@@ -85,25 +85,35 @@ func (n Node) DelProperty(name string) error {
 	return nil
 }
 
-func (n Node) AddRelationship(relationship string, node api.Node) (api.Relationship, error) {
+func (n Node) AddRelationship(direction api.Direction, relationship string, properties map[string]interface{}, node api.Node) (api.Relationship, error) {
+	if properties == nil {
+		properties = map[string]interface{}{}
+	}
 	relID := getRelationID(n.Type(), n.ID(), relationship, node.Type(), node.ID())
 	n.db.relationshipTypes.Store(relationship, struct{}{})
 	rkey := getRelationshipPath(relationship, relID)
-	source := getNodeRelationshipPath(n.Type(), n.ID(), api.Outgoing, relationship, node.Type(), node.ID(), relID)
-	target := getNodeRelationshipPath(node.Type(), node.ID(), api.Incoming, relationship, n.Type(), n.ID(), relID)
-
-	values := map[string]interface{}{
-		Direction:  api.Outgoing,
-		SourceType: n.Type(),
-		SourceID:   n.ID(),
-		TargetID:   node.ID(),
-		TargetType: node.Type(),
-		ID:         relID,
-		Relation:   relationship,
-		Type:       relationship,
+	var sourceNode api.Node
+	var targetNode api.Node
+	if direction == api.Outgoing {
+		targetNode = node
+		sourceNode = n
+	} else {
+		targetNode = n
+		sourceNode = node
 	}
+	source := getNodeRelationshipPath(sourceNode.Type(), sourceNode.ID(), direction, relationship, targetNode.Type(), targetNode.ID(), relID)
+	target := getNodeRelationshipPath(targetNode.Type(), targetNode.ID(), direction.Opposite(), relationship, sourceNode.Type(), sourceNode.ID(), relID)
 
-	bits, err := encode.Marshal(&values)
+	properties[Direction] = direction
+	properties[SourceType] = sourceNode.Type()
+	properties[SourceType] = sourceNode.ID()
+	properties[TargetType] = targetNode.Type()
+	properties[TargetID] = targetNode.ID()
+	properties[ID] = relID
+	properties[Relation] = relationship
+	properties[Type] = relationship
+
+	bits, err := encode.Marshal(&properties)
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}
@@ -117,7 +127,7 @@ func (n Node) AddRelationship(relationship string, node api.Node) (api.Relations
 		if err := txn.Set(target, bits); err != nil {
 			return stacktrace.Propagate(err, "")
 		}
-		for k, v := range values {
+		for k, v := range properties {
 			n.db.relationshipFieldMap.Store(strings.Join([]string{relationship, k}, ","), struct{}{})
 			key := getRelationshipFieldPath(relationship, k, v, relID)
 			if err := txn.Set(key, bits); err != nil {
@@ -131,7 +141,7 @@ func (n Node) AddRelationship(relationship string, node api.Node) (api.Relations
 	r := &Relationship{
 		relationshipType: relationship,
 		relationshipID:   relID,
-		item:             values,
+		item:             properties,
 		db:               n.db,
 	}
 	n.db.cache.Set(string(rkey), r, 1)

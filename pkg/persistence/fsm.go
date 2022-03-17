@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"github.com/autom8ter/morpheus/pkg/api"
 	"github.com/autom8ter/morpheus/pkg/encode"
 	"github.com/autom8ter/morpheus/pkg/graph/fsm"
 	"github.com/autom8ter/morpheus/pkg/helpers"
@@ -88,6 +89,7 @@ func (d *DB) FSM() raft.FSM {
 					sourceType = cmd.Metadata["source.type"]
 					sourceID   = cmd.Metadata["source.id"]
 					relation   = cmd.Metadata["relationship"]
+					direction  = cmd.Metadata["direction"]
 				)
 				if sourceType == "" || sourceID == "" || relation == "" {
 					return stacktrace.NewError("bad raft cmd")
@@ -100,7 +102,7 @@ func (d *DB) FSM() raft.FSM {
 				if err != nil {
 					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
-				rel, err := source.AddRelationship(relation, target)
+				rel, err := source.AddRelationship(relation, api.Direction(direction), cmd.Properties, target)
 				if err != nil {
 					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}

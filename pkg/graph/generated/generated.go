@@ -46,9 +46,9 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	Node struct {
-		AddIncomingNode func(childComplexity int, relation string, addNode model.AddNode) int
-		AddOutboundNode func(childComplexity int, relation string, addNode model.AddNode) int
-		AddRelationship func(childComplexity int, relationship string, nodeKey model.Key) int
+		AddIncomingNode func(childComplexity int, relation string, direction *model.Direction, properties map[string]interface{}, addNode model.AddNode) int
+		AddOutboundNode func(childComplexity int, relation string, direction *model.Direction, properties map[string]interface{}, addNode model.AddNode) int
+		AddRelationship func(childComplexity int, direction *model.Direction, relationship string, properties map[string]interface{}, nodeKey model.Key) int
 		DelProperty     func(childComplexity int, key string) int
 		DelRelationship func(childComplexity int, key model.Key) int
 		GetProperty     func(childComplexity int, key string) int
@@ -101,11 +101,11 @@ type NodeResolver interface {
 	SetProperties(ctx context.Context, obj *model.Node, properties map[string]interface{}) (bool, error)
 
 	GetRelationship(ctx context.Context, obj *model.Node, relationship string, id string) (*model.Relationship, error)
-	AddRelationship(ctx context.Context, obj *model.Node, relationship string, nodeKey model.Key) (*model.Relationship, error)
+	AddRelationship(ctx context.Context, obj *model.Node, direction *model.Direction, relationship string, properties map[string]interface{}, nodeKey model.Key) (*model.Relationship, error)
 	DelRelationship(ctx context.Context, obj *model.Node, key model.Key) (bool, error)
 	Relationships(ctx context.Context, obj *model.Node, where model.RelationWhere) (*model.Relationships, error)
-	AddIncomingNode(ctx context.Context, obj *model.Node, relation string, addNode model.AddNode) (*model.Node, error)
-	AddOutboundNode(ctx context.Context, obj *model.Node, relation string, addNode model.AddNode) (*model.Node, error)
+	AddIncomingNode(ctx context.Context, obj *model.Node, relation string, direction *model.Direction, properties map[string]interface{}, addNode model.AddNode) (*model.Node, error)
+	AddOutboundNode(ctx context.Context, obj *model.Node, relation string, direction *model.Direction, properties map[string]interface{}, addNode model.AddNode) (*model.Node, error)
 }
 type QueryResolver interface {
 	Types(ctx context.Context) ([]string, error)
@@ -150,7 +150,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Node.AddIncomingNode(childComplexity, args["relation"].(string), args["addNode"].(model.AddNode)), true
+		return e.complexity.Node.AddIncomingNode(childComplexity, args["relation"].(string), args["direction"].(*model.Direction), args["properties"].(map[string]interface{}), args["addNode"].(model.AddNode)), true
 
 	case "Node.addOutboundNode":
 		if e.complexity.Node.AddOutboundNode == nil {
@@ -162,7 +162,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Node.AddOutboundNode(childComplexity, args["relation"].(string), args["addNode"].(model.AddNode)), true
+		return e.complexity.Node.AddOutboundNode(childComplexity, args["relation"].(string), args["direction"].(*model.Direction), args["properties"].(map[string]interface{}), args["addNode"].(model.AddNode)), true
 
 	case "Node.addRelationship":
 		if e.complexity.Node.AddRelationship == nil {
@@ -174,7 +174,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Node.AddRelationship(childComplexity, args["relationship"].(string), args["nodeKey"].(model.Key)), true
+		return e.complexity.Node.AddRelationship(childComplexity, args["direction"].(*model.Direction), args["relationship"].(string), args["properties"].(map[string]interface{}), args["nodeKey"].(model.Key)), true
 
 	case "Node.delProperty":
 		if e.complexity.Node.DelProperty == nil {
@@ -605,11 +605,11 @@ type Node implements Entity {
     setProperties(properties: Map!): Boolean!
     delProperty(key: String!): Boolean!
     getRelationship(relationship: String!, id: String!): Relationship!
-    addRelationship(relationship: String!, nodeKey: Key!): Relationship!
+    addRelationship(direction: Direction, relationship: String!, properties: Map, nodeKey: Key!): Relationship!
     delRelationship(key: Key!): Boolean!
     relationships(where: RelationWhere!): Relationships!
-    addIncomingNode(relation: String!, addNode: AddNode!): Node!
-    addOutboundNode(relation: String!, addNode: AddNode!): Node!
+    addIncomingNode(relation: String!, direction: Direction, properties: Map, addNode: AddNode!): Node!
+    addOutboundNode(relation: String!, direction: Direction, properties: Map, addNode: AddNode!): Node!
 }
 
 type Relationship implements Entity {
@@ -680,15 +680,33 @@ func (ec *executionContext) field_Node_addIncomingNode_args(ctx context.Context,
 		}
 	}
 	args["relation"] = arg0
-	var arg1 model.AddNode
-	if tmp, ok := rawArgs["addNode"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addNode"))
-		arg1, err = ec.unmarshalNAddNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx, tmp)
+	var arg1 *model.Direction
+	if tmp, ok := rawArgs["direction"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
+		arg1, err = ec.unmarshalODirection2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["addNode"] = arg1
+	args["direction"] = arg1
+	var arg2 map[string]interface{}
+	if tmp, ok := rawArgs["properties"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("properties"))
+		arg2, err = ec.unmarshalOMap2map(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["properties"] = arg2
+	var arg3 model.AddNode
+	if tmp, ok := rawArgs["addNode"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addNode"))
+		arg3, err = ec.unmarshalNAddNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["addNode"] = arg3
 	return args, nil
 }
 
@@ -704,39 +722,75 @@ func (ec *executionContext) field_Node_addOutboundNode_args(ctx context.Context,
 		}
 	}
 	args["relation"] = arg0
-	var arg1 model.AddNode
-	if tmp, ok := rawArgs["addNode"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addNode"))
-		arg1, err = ec.unmarshalNAddNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx, tmp)
+	var arg1 *model.Direction
+	if tmp, ok := rawArgs["direction"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
+		arg1, err = ec.unmarshalODirection2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["addNode"] = arg1
+	args["direction"] = arg1
+	var arg2 map[string]interface{}
+	if tmp, ok := rawArgs["properties"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("properties"))
+		arg2, err = ec.unmarshalOMap2map(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["properties"] = arg2
+	var arg3 model.AddNode
+	if tmp, ok := rawArgs["addNode"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addNode"))
+		arg3, err = ec.unmarshalNAddNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAddNode(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["addNode"] = arg3
 	return args, nil
 }
 
 func (ec *executionContext) field_Node_addRelationship_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 string
+	var arg0 *model.Direction
+	if tmp, ok := rawArgs["direction"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
+		arg0, err = ec.unmarshalODirection2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["direction"] = arg0
+	var arg1 string
 	if tmp, ok := rawArgs["relationship"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relationship"))
-		arg0, err = ec.unmarshalNString2string(ctx, tmp)
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["relationship"] = arg0
-	var arg1 model.Key
+	args["relationship"] = arg1
+	var arg2 map[string]interface{}
+	if tmp, ok := rawArgs["properties"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("properties"))
+		arg2, err = ec.unmarshalOMap2map(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["properties"] = arg2
+	var arg3 model.Key
 	if tmp, ok := rawArgs["nodeKey"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("nodeKey"))
-		arg1, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
+		arg3, err = ec.unmarshalNKey2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐKey(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["nodeKey"] = arg1
+	args["nodeKey"] = arg3
 	return args, nil
 }
 
@@ -1376,7 +1430,7 @@ func (ec *executionContext) _Node_addRelationship(ctx context.Context, field gra
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Node().AddRelationship(rctx, obj, args["relationship"].(string), args["nodeKey"].(model.Key))
+		return ec.resolvers.Node().AddRelationship(rctx, obj, args["direction"].(*model.Direction), args["relationship"].(string), args["properties"].(map[string]interface{}), args["nodeKey"].(model.Key))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1502,7 +1556,7 @@ func (ec *executionContext) _Node_addIncomingNode(ctx context.Context, field gra
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Node().AddIncomingNode(rctx, obj, args["relation"].(string), args["addNode"].(model.AddNode))
+		return ec.resolvers.Node().AddIncomingNode(rctx, obj, args["relation"].(string), args["direction"].(*model.Direction), args["properties"].(map[string]interface{}), args["addNode"].(model.AddNode))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1544,7 +1598,7 @@ func (ec *executionContext) _Node_addOutboundNode(ctx context.Context, field gra
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Node().AddOutboundNode(rctx, obj, args["relation"].(string), args["addNode"].(model.AddNode))
+		return ec.resolvers.Node().AddOutboundNode(rctx, obj, args["relation"].(string), args["direction"].(*model.Direction), args["properties"].(map[string]interface{}), args["addNode"].(model.AddNode))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -5628,6 +5682,22 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	}
 	res := graphql.MarshalBoolean(*v)
 	return res
+}
+
+func (ec *executionContext) unmarshalODirection2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx context.Context, v interface{}) (*model.Direction, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.Direction)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalODirection2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐDirection(ctx context.Context, sel ast.SelectionSet, v *model.Direction) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) unmarshalOExpression2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐExpressionᚄ(ctx context.Context, v interface{}) ([]*model.Expression, error) {

@@ -70,11 +70,11 @@ type Node implements Entity {
     setProperties(properties: Map!): Boolean!
     delProperty(key: String!): Boolean!
     getRelationship(relationship: String!, id: String!): Relationship!
-    addRelationship(relationship: String!, nodeKey: Key!): Relationship!
+    addRelationship(direction: Direction, relationship: String!, properties: Map, nodeKey: Key!): Relationship!
     delRelationship(key: Key!): Boolean!
     relationships(where: RelationWhere!): Relationships!
-    addIncomingNode(relation: String!, addNode: AddNode!): Node!
-    addOutboundNode(relation: String!, addNode: AddNode!): Node!
+    addIncomingNode(relation: String!, direction: Direction, properties: Map, addNode: AddNode!): Node!
+    addOutboundNode(relation: String!, direction: Direction, properties: Map, addNode: AddNode!): Node!
 }
 
 type Relationship implements Entity {
