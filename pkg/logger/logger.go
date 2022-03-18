@@ -1,22 +1,26 @@
 package logger
 
 import (
+	"github.com/armon/go-metrics"
 	"github.com/autom8ter/morpheus/pkg/version"
 	"github.com/palantir/stacktrace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"net/http"
 	"os"
+	"time"
 )
 
 func init() {
+
 	L = New(true)
 }
 
 var L *Logger
 
 type Logger struct {
-	logger *zap.Logger
+	logger  *zap.Logger
+	metrics *metrics.Metrics
 }
 
 func New(json bool) *Logger {
@@ -25,6 +29,11 @@ func New(json bool) *Logger {
 		"host":    hst,
 		"service": "morpheus",
 		"version": version.Version,
+	}
+	inm := metrics.NewInmemSink(10*time.Second, time.Minute)
+	m, err := metrics.NewGlobal(metrics.DefaultConfig("morpheus"), inm)
+	if err != nil {
+		panic(stacktrace.Propagate(err, ""))
 	}
 
 	zap.NewDevelopmentConfig()
@@ -45,7 +54,8 @@ func New(json bool) *Logger {
 		})
 		core := zapcore.NewCore(jsonEncoder, os.Stdout, zap.InfoLevel)
 		return &Logger{
-			logger: zap.New(core).With(toFields(fields)...),
+			metrics: m,
+			logger:  zap.New(core).With(toFields(fields)...),
 		}
 	} else {
 		txtEncoder := zapcore.NewConsoleEncoder(zapcore.EncoderConfig{
@@ -64,7 +74,8 @@ func New(json bool) *Logger {
 		})
 		core := zapcore.NewCore(txtEncoder, os.Stdout, zap.InfoLevel)
 		return &Logger{
-			logger: zap.New(core).With(toFields(fields)...),
+			metrics: m,
+			logger:  zap.New(core).With(toFields(fields)...),
 		}
 	}
 }
@@ -91,6 +102,10 @@ func (l *Logger) Error(msg string, err error, fields map[string]interface{}) {
 		fields["error.cause"] = stacktrace.RootCause(err)
 	}
 	l.logger.Error(msg, toFields(fields)...)
+}
+
+func (l *Logger) Metrics() *metrics.Metrics {
+	return l.metrics
 }
 
 func (l *Logger) HTTPError(w http.ResponseWriter, message string, err error, status int) {

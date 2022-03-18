@@ -91,7 +91,7 @@ func (d *DB) FSM() raft.FSM {
 					relation   = cmd.Metadata["relationship"]
 					direction  = cmd.Metadata["direction"]
 				)
-				if sourceType == "" || sourceID == "" || relation == "" {
+				if sourceType == "" || sourceID == "" || relation == "" || direction == "" {
 					return stacktrace.NewError("bad raft cmd")
 				}
 				source, err := d.GetNode(sourceType, sourceID)

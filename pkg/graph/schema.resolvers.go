@@ -19,6 +19,7 @@ import (
 	"github.com/autom8ter/morpheus/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/palantir/stacktrace"
+	"github.com/spf13/cast"
 )
 
 func (r *nodeResolver) Properties(ctx context.Context, obj *model.Node) (map[string]interface{}, error) {
@@ -362,6 +363,65 @@ func (r *queryResolver) List(ctx context.Context, where model.NodeWhere) (*model
 		resp.Values = append(resp.Values, n)
 	}
 	return resp, nil
+}
+
+func (r *queryResolver) Agg(ctx context.Context, agg model.Aggregate, field string, where model.NodeWhere) (float64, error) {
+	switch agg {
+	case model.AggregateSum:
+		nodes, err := r.List(ctx, where)
+		if err != nil {
+			return 0, err
+		}
+		sum := float64(0)
+		for _, n := range nodes.Values {
+			sum += cast.ToFloat64(n.Properties[field])
+		}
+		return sum, nil
+	case model.AggregateCount:
+		nodes, err := r.List(ctx, where)
+		if err != nil {
+			return 0, err
+		}
+		return float64(len(nodes.Values)), nil
+	case model.AggregateAvg:
+		nodes, err := r.List(ctx, where)
+		if err != nil {
+			return 0, err
+		}
+		sum := float64(0)
+		for _, n := range nodes.Values {
+			sum += cast.ToFloat64(n.Properties[field])
+		}
+		if sum == 0 {
+			return 0, nil
+		}
+		return sum / float64(len(nodes.Values)), nil
+	case model.AggregateMax:
+		nodes, err := r.List(ctx, where)
+		if err != nil {
+			return 0, err
+		}
+		max := float64(0)
+		for _, n := range nodes.Values {
+			if field := cast.ToFloat64(n.Properties[field]); field > max {
+				max = field
+			}
+		}
+		return max, nil
+	case model.AggregateMin:
+		nodes, err := r.List(ctx, where)
+		if err != nil {
+			return 0, err
+		}
+		min := float64(0)
+		for _, n := range nodes.Values {
+			if field := cast.ToFloat64(n.Properties[field]); field < min {
+				min = field
+			}
+		}
+		return min, nil
+	}
+	return 0, nil
 }
 
 func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node, error) {

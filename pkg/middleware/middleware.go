@@ -19,10 +19,10 @@ func NewMiddleware(config *config.Config) *Middleware {
 
 func (m *Middleware) Wrap(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+		now := time.Now()
 		ctx := req.Context()
 		bearToken := req.Header.Get("Authorization")
 		token := strings.TrimPrefix(bearToken, "Bearer ")
-		now := time.Now()
 		w := &responseWriterWrapper{w: writer}
 		logFields := map[string]interface{}{
 			"url":    req.URL.String(),
@@ -34,7 +34,8 @@ func (m *Middleware) Wrap(handler http.Handler) http.Handler {
 			}
 			//logFields["response_body"] = w.Body()
 			logFields["response_status"] = w.StatusCode()
-			logFields["elapsed_ns"] = time.Since(now).Nanoseconds()
+			logFields["elapsed_ms"] = time.Since(now).Milliseconds()
+			logger.L.Metrics().MeasureSince([]string{req.URL.Path, req.Method}, now)
 			logger.L.Info("http request/response", logFields)
 		}()
 

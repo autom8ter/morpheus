@@ -106,7 +106,7 @@ func (n Node) AddRelationship(direction api.Direction, relationship string, prop
 
 	properties[Direction] = direction
 	properties[SourceType] = sourceNode.Type()
-	properties[SourceType] = sourceNode.ID()
+	properties[SourceID] = sourceNode.ID()
 	properties[TargetType] = targetNode.Type()
 	properties[TargetID] = targetNode.ID()
 	properties[ID] = relID

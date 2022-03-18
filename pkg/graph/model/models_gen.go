@@ -98,6 +98,53 @@ type SetNode struct {
 	Properties map[string]interface{} `json:"properties"`
 }
 
+type Aggregate string
+
+const (
+	AggregateSum   Aggregate = "SUM"
+	AggregateCount Aggregate = "COUNT"
+	AggregateAvg   Aggregate = "AVG"
+	AggregateMax   Aggregate = "MAX"
+	AggregateMin   Aggregate = "MIN"
+)
+
+var AllAggregate = []Aggregate{
+	AggregateSum,
+	AggregateCount,
+	AggregateAvg,
+	AggregateMax,
+	AggregateMin,
+}
+
+func (e Aggregate) IsValid() bool {
+	switch e {
+	case AggregateSum, AggregateCount, AggregateAvg, AggregateMax, AggregateMin:
+		return true
+	}
+	return false
+}
+
+func (e Aggregate) String() string {
+	return string(e)
+}
+
+func (e *Aggregate) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = Aggregate(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid Aggregate", str)
+	}
+	return nil
+}
+
+func (e Aggregate) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
 type Direction string
 
 const (

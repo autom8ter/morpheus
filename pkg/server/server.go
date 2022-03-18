@@ -36,7 +36,7 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%v", cfg.Server.Port))
 	if err != nil {
-		return err
+		return stacktrace.Propagate(err, "")
 	}
 	defer lis.Close()
 	if cfg.Server.TLSCert != "" {
@@ -83,17 +83,22 @@ func Serve(ctx context.Context, g api.Graph, cfg *config.Config) error {
 		if cfg.Features.ApolloTracing {
 			srv.Use(apollotracing.Tracer{})
 		}
-		//srv.Use(extension.AutomaticPersistedQuery{})
-		if cfg.Features.LogQueries {
-			srv.AroundOperations(func(ctx context.Context, next graphql.OperationHandler) graphql.ResponseHandler {
-				oc := graphql.GetOperationContext(ctx)
+
+		srv.AroundOperations(func(ctx context.Context, next graphql.OperationHandler) graphql.ResponseHandler {
+			oc := graphql.GetOperationContext(ctx)
+			now := time.Now()
+			logger.L.Metrics().IncrCounter([]string{oc.OperationName}, 1)
+			defer logger.L.Metrics().MeasureSince([]string{oc.OperationName}, now)
+			//srv.Use(extension.AutomaticPersistedQuery{})
+			if cfg.Features.LogQueries {
 				logger.L.Info("executing operation", map[string]interface{}{
 					"operation_name": oc.OperationName,
 					"raw_query":      oc.RawQuery,
 				})
-				return next(ctx)
-			})
-		}
+			}
+
+			return next(ctx)
+		})
 	}
 
 	mux.Handle("/", playground.Handler("GraphQL Console", "/query"))

@@ -33,11 +33,11 @@ func toRelationship(rel api.Relationship) (*model.Relationship, error) {
 	}
 	sourceNode, err := toNode(source)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "failed to load source node")
+		return nil, stacktrace.Propagate(err, "failed to load source node %s %s", source.Type(), source.ID())
 	}
 	targetNode, err := toNode(target)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "failed to load target node")
+		return nil, stacktrace.Propagate(err, "failed to load target nod %s %s", target.Type(), target.ID())
 	}
 	return &model.Relationship{
 		ID:     rel.ID(),

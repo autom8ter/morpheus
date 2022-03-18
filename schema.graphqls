@@ -110,10 +110,19 @@ input SetNode {
     properties: Map
 }
 
+enum Aggregate {
+    SUM
+    COUNT
+    AVG
+    MAX
+    MIN
+}
+
 type Query {
     types: [String!]
     get(key: Key!): Node!
     list(where: NodeWhere!): Nodes!
+    agg(agg: Aggregate!, field: String!, where: NodeWhere!): Float!
 
     add(add: AddNode!): Node!
     set(set: SetNode!): Node!
