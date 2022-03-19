@@ -19,6 +19,14 @@ enum Operator {
     HAS_SUFFIX
 }
 
+enum AggregateFunction {
+    SUM
+    COUNT
+    AVG
+    MAX
+    MIN
+}
+
 input Expression {
     key: String!
     operator: Operator!
@@ -91,13 +99,13 @@ type Relationship implements Entity {
 type Relationships {
     cursor: String!
     values: [Relationship!]
-    agg(agg: Aggregate!, field: String!): Float!
+    agg(fn: AggregateFunction!, field: String!): Float!
 }
 
 type Nodes {
     cursor: String!
     values: [Node!]
-    agg(agg: Aggregate!, field: String!): Float!
+    agg(fn: AggregateFunction!, field: String!): Float!
 }
 
 input AddNode {
@@ -112,13 +120,6 @@ input SetNode {
     properties: Map
 }
 
-enum Aggregate {
-    SUM
-    COUNT
-    AVG
-    MAX
-    MIN
-}
 
 type Query {
     types: [String!]

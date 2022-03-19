@@ -305,7 +305,18 @@ func (r *nodesResolver) Agg(ctx context.Context, obj *model.Nodes, agg model.Agg
 		}
 		return sum, nil
 	case model.AggregateCount:
-		return float64(len(obj.Values)), nil
+		if field == "*" || field == "" {
+			return float64(len(obj.Values)), nil
+		}
+		count := 0
+		for _, n := range obj.Values {
+			_, ok := n.Properties[field]
+			if ok {
+				count++
+			}
+		}
+		return float64(count), nil
+
 	case model.AggregateAvg:
 		sum := float64(0)
 		for _, n := range obj.Values {
@@ -716,7 +727,17 @@ func (r *relationshipsResolver) Agg(ctx context.Context, obj *model.Relationship
 		}
 		return sum, nil
 	case model.AggregateCount:
-		return float64(len(obj.Values)), nil
+		if field == "*" || field == "" {
+			return float64(len(obj.Values)), nil
+		}
+		count := 0
+		for _, n := range obj.Values {
+			_, ok := n.Properties[field]
+			if ok {
+				count++
+			}
+		}
+		return float64(count), nil
 	case model.AggregateAvg:
 		sum := float64(0)
 		for _, n := range obj.Values {
