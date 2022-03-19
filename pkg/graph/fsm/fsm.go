@@ -57,16 +57,16 @@ const (
 )
 
 type CMD struct {
-	Method       Method `json:"method"`
-	Node         model.Node
-	Relationship model.Relationship
-	AddNodes     []*model.AddNode
-	SetNodes     []*model.SetNode
-	Key          model.Key
-	Keys         []*model.Key
-	Properties   map[string]interface{}
-	Timestamp    time.Time         `json:"timestamp"`
-	Metadata     map[string]string `json:"metadata"`
+	Method     Method `json:"method"`
+	Node       model.Node
+	Relation   model.Relation
+	AddNodes   []*model.AddNode
+	SetNodes   []*model.SetNode
+	Key        model.Key
+	Keys       []*model.Key
+	Properties map[string]interface{}
+	Timestamp  time.Time         `json:"timestamp"`
+	Metadata   map[string]string `json:"metadata"`
 }
 
 type CMDHandlerFunc func(c CMD) ([]interface{}, error)

@@ -22,7 +22,7 @@ func toNode(n api.Node) (*model.Node, error) {
 	}, nil
 }
 
-func toRelationship(rel api.Relationship) (*model.Relationship, error) {
+func toRelation(rel api.Relation) (*model.Relation, error) {
 	source, err := rel.Source()
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to load source")
@@ -39,7 +39,7 @@ func toRelationship(rel api.Relationship) (*model.Relationship, error) {
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "failed to load target nod %s %s", target.Type(), target.ID())
 	}
-	return &model.Relationship{
+	return &model.Relation{
 		ID:     rel.ID(),
 		Type:   rel.Type(),
 		Source: sourceNode,

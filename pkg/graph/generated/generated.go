@@ -39,8 +39,8 @@ type ResolverRoot interface {
 	Node() NodeResolver
 	Nodes() NodesResolver
 	Query() QueryResolver
-	Relationship() RelationshipResolver
-	Relationships() RelationshipsResolver
+	Relation() RelationResolver
+	Relations() RelationsResolver
 }
 
 type DirectiveRoot struct {
@@ -50,20 +50,20 @@ type ComplexityRoot struct {
 	Node struct {
 		AddIncomingNode func(childComplexity int, relation string, properties map[string]interface{}, addNode model.AddNode) int
 		AddOutboundNode func(childComplexity int, relation string, properties map[string]interface{}, addNode model.AddNode) int
-		AddRelationship func(childComplexity int, direction *model.Direction, relationship string, properties map[string]interface{}, nodeKey model.Key) int
+		AddRelation     func(childComplexity int, direction *model.Direction, relation string, properties map[string]interface{}, nodeKey model.Key) int
 		DelProperty     func(childComplexity int, key string) int
-		DelRelationship func(childComplexity int, key model.Key) int
+		DelRelation     func(childComplexity int, key model.Key) int
 		GetProperty     func(childComplexity int, key string) int
-		GetRelationship func(childComplexity int, relationship string, id string) int
+		GetRelation     func(childComplexity int, relation string, id string) int
 		ID              func(childComplexity int) int
 		Properties      func(childComplexity int) int
-		Relationships   func(childComplexity int, where model.RelationWhere) int
+		Relations       func(childComplexity int, where model.RelationWhere) int
 		SetProperties   func(childComplexity int, properties map[string]interface{}) int
 		Type            func(childComplexity int) int
 	}
 
 	Nodes struct {
-		Agg    func(childComplexity int, agg model.Aggregate, field string) int
+		Agg    func(childComplexity int, fn model.AggregateFunction, field string) int
 		Cursor func(childComplexity int) int
 		Values func(childComplexity int) int
 	}
@@ -81,7 +81,7 @@ type ComplexityRoot struct {
 		Types   func(childComplexity int) int
 	}
 
-	Relationship struct {
+	Relation struct {
 		DelProperty   func(childComplexity int, key string) int
 		GetProperty   func(childComplexity int, key string) int
 		ID            func(childComplexity int) int
@@ -92,8 +92,8 @@ type ComplexityRoot struct {
 		Type          func(childComplexity int) int
 	}
 
-	Relationships struct {
-		Agg    func(childComplexity int, agg model.Aggregate, field string) int
+	Relations struct {
+		Agg    func(childComplexity int, fn model.AggregateFunction, field string) int
 		Cursor func(childComplexity int) int
 		Values func(childComplexity int) int
 	}
@@ -104,15 +104,15 @@ type NodeResolver interface {
 	GetProperty(ctx context.Context, obj *model.Node, key string) (interface{}, error)
 	SetProperties(ctx context.Context, obj *model.Node, properties map[string]interface{}) (bool, error)
 
-	GetRelationship(ctx context.Context, obj *model.Node, relationship string, id string) (*model.Relationship, error)
-	AddRelationship(ctx context.Context, obj *model.Node, direction *model.Direction, relationship string, properties map[string]interface{}, nodeKey model.Key) (*model.Relationship, error)
-	DelRelationship(ctx context.Context, obj *model.Node, key model.Key) (bool, error)
-	Relationships(ctx context.Context, obj *model.Node, where model.RelationWhere) (*model.Relationships, error)
+	GetRelation(ctx context.Context, obj *model.Node, relation string, id string) (*model.Relation, error)
+	AddRelation(ctx context.Context, obj *model.Node, direction *model.Direction, relation string, properties map[string]interface{}, nodeKey model.Key) (*model.Relation, error)
+	DelRelation(ctx context.Context, obj *model.Node, key model.Key) (bool, error)
+	Relations(ctx context.Context, obj *model.Node, where model.RelationWhere) (*model.Relations, error)
 	AddIncomingNode(ctx context.Context, obj *model.Node, relation string, properties map[string]interface{}, addNode model.AddNode) (*model.Node, error)
 	AddOutboundNode(ctx context.Context, obj *model.Node, relation string, properties map[string]interface{}, addNode model.AddNode) (*model.Node, error)
 }
 type NodesResolver interface {
-	Agg(ctx context.Context, obj *model.Nodes, agg model.Aggregate, field string) (float64, error)
+	Agg(ctx context.Context, obj *model.Nodes, fn model.AggregateFunction, field string) (float64, error)
 }
 type QueryResolver interface {
 	Types(ctx context.Context) ([]string, error)
@@ -126,13 +126,13 @@ type QueryResolver interface {
 	BulkDel(ctx context.Context, del []*model.Key) (bool, error)
 	Login(ctx context.Context, username string, password string) (string, error)
 }
-type RelationshipResolver interface {
-	Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error)
-	GetProperty(ctx context.Context, obj *model.Relationship, key string) (interface{}, error)
-	SetProperties(ctx context.Context, obj *model.Relationship, properties map[string]interface{}) (bool, error)
+type RelationResolver interface {
+	Properties(ctx context.Context, obj *model.Relation) (map[string]interface{}, error)
+	GetProperty(ctx context.Context, obj *model.Relation, key string) (interface{}, error)
+	SetProperties(ctx context.Context, obj *model.Relation, properties map[string]interface{}) (bool, error)
 }
-type RelationshipsResolver interface {
-	Agg(ctx context.Context, obj *model.Relationships, agg model.Aggregate, field string) (float64, error)
+type RelationsResolver interface {
+	Agg(ctx context.Context, obj *model.Relations, fn model.AggregateFunction, field string) (float64, error)
 }
 
 type executableSchema struct {
@@ -174,17 +174,17 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Node.AddOutboundNode(childComplexity, args["relation"].(string), args["properties"].(map[string]interface{}), args["addNode"].(model.AddNode)), true
 
-	case "Node.addRelationship":
-		if e.complexity.Node.AddRelationship == nil {
+	case "Node.addRelation":
+		if e.complexity.Node.AddRelation == nil {
 			break
 		}
 
-		args, err := ec.field_Node_addRelationship_args(context.TODO(), rawArgs)
+		args, err := ec.field_Node_addRelation_args(context.TODO(), rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.Node.AddRelationship(childComplexity, args["direction"].(*model.Direction), args["relationship"].(string), args["properties"].(map[string]interface{}), args["nodeKey"].(model.Key)), true
+		return e.complexity.Node.AddRelation(childComplexity, args["direction"].(*model.Direction), args["relation"].(string), args["properties"].(map[string]interface{}), args["nodeKey"].(model.Key)), true
 
 	case "Node.delProperty":
 		if e.complexity.Node.DelProperty == nil {
@@ -198,17 +198,17 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Node.DelProperty(childComplexity, args["key"].(string)), true
 
-	case "Node.delRelationship":
-		if e.complexity.Node.DelRelationship == nil {
+	case "Node.delRelation":
+		if e.complexity.Node.DelRelation == nil {
 			break
 		}
 
-		args, err := ec.field_Node_delRelationship_args(context.TODO(), rawArgs)
+		args, err := ec.field_Node_delRelation_args(context.TODO(), rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.Node.DelRelationship(childComplexity, args["key"].(model.Key)), true
+		return e.complexity.Node.DelRelation(childComplexity, args["key"].(model.Key)), true
 
 	case "Node.getProperty":
 		if e.complexity.Node.GetProperty == nil {
@@ -222,17 +222,17 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Node.GetProperty(childComplexity, args["key"].(string)), true
 
-	case "Node.getRelationship":
-		if e.complexity.Node.GetRelationship == nil {
+	case "Node.getRelation":
+		if e.complexity.Node.GetRelation == nil {
 			break
 		}
 
-		args, err := ec.field_Node_getRelationship_args(context.TODO(), rawArgs)
+		args, err := ec.field_Node_getRelation_args(context.TODO(), rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.Node.GetRelationship(childComplexity, args["relationship"].(string), args["id"].(string)), true
+		return e.complexity.Node.GetRelation(childComplexity, args["relation"].(string), args["id"].(string)), true
 
 	case "Node.id":
 		if e.complexity.Node.ID == nil {
@@ -248,17 +248,17 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Node.Properties(childComplexity), true
 
-	case "Node.relationships":
-		if e.complexity.Node.Relationships == nil {
+	case "Node.relations":
+		if e.complexity.Node.Relations == nil {
 			break
 		}
 
-		args, err := ec.field_Node_relationships_args(context.TODO(), rawArgs)
+		args, err := ec.field_Node_relations_args(context.TODO(), rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.Node.Relationships(childComplexity, args["where"].(model.RelationWhere)), true
+		return e.complexity.Node.Relations(childComplexity, args["where"].(model.RelationWhere)), true
 
 	case "Node.setProperties":
 		if e.complexity.Node.SetProperties == nil {
@@ -289,7 +289,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Nodes.Agg(childComplexity, args["agg"].(model.Aggregate), args["field"].(string)), true
+		return e.complexity.Nodes.Agg(childComplexity, args["fn"].(model.AggregateFunction), args["field"].(string)), true
 
 	case "Nodes.cursor":
 		if e.complexity.Nodes.Cursor == nil {
@@ -420,102 +420,102 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.Types(childComplexity), true
 
-	case "Relationship.delProperty":
-		if e.complexity.Relationship.DelProperty == nil {
+	case "Relation.delProperty":
+		if e.complexity.Relation.DelProperty == nil {
 			break
 		}
 
-		args, err := ec.field_Relationship_delProperty_args(context.TODO(), rawArgs)
+		args, err := ec.field_Relation_delProperty_args(context.TODO(), rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.Relationship.DelProperty(childComplexity, args["key"].(string)), true
+		return e.complexity.Relation.DelProperty(childComplexity, args["key"].(string)), true
 
-	case "Relationship.getProperty":
-		if e.complexity.Relationship.GetProperty == nil {
+	case "Relation.getProperty":
+		if e.complexity.Relation.GetProperty == nil {
 			break
 		}
 
-		args, err := ec.field_Relationship_getProperty_args(context.TODO(), rawArgs)
+		args, err := ec.field_Relation_getProperty_args(context.TODO(), rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.Relationship.GetProperty(childComplexity, args["key"].(string)), true
+		return e.complexity.Relation.GetProperty(childComplexity, args["key"].(string)), true
 
-	case "Relationship.id":
-		if e.complexity.Relationship.ID == nil {
+	case "Relation.id":
+		if e.complexity.Relation.ID == nil {
 			break
 		}
 
-		return e.complexity.Relationship.ID(childComplexity), true
+		return e.complexity.Relation.ID(childComplexity), true
 
-	case "Relationship.properties":
-		if e.complexity.Relationship.Properties == nil {
+	case "Relation.properties":
+		if e.complexity.Relation.Properties == nil {
 			break
 		}
 
-		return e.complexity.Relationship.Properties(childComplexity), true
+		return e.complexity.Relation.Properties(childComplexity), true
 
-	case "Relationship.setProperties":
-		if e.complexity.Relationship.SetProperties == nil {
+	case "Relation.setProperties":
+		if e.complexity.Relation.SetProperties == nil {
 			break
 		}
 
-		args, err := ec.field_Relationship_setProperties_args(context.TODO(), rawArgs)
+		args, err := ec.field_Relation_setProperties_args(context.TODO(), rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.Relationship.SetProperties(childComplexity, args["properties"].(map[string]interface{})), true
+		return e.complexity.Relation.SetProperties(childComplexity, args["properties"].(map[string]interface{})), true
 
-	case "Relationship.source":
-		if e.complexity.Relationship.Source == nil {
+	case "Relation.source":
+		if e.complexity.Relation.Source == nil {
 			break
 		}
 
-		return e.complexity.Relationship.Source(childComplexity), true
+		return e.complexity.Relation.Source(childComplexity), true
 
-	case "Relationship.target":
-		if e.complexity.Relationship.Target == nil {
+	case "Relation.target":
+		if e.complexity.Relation.Target == nil {
 			break
 		}
 
-		return e.complexity.Relationship.Target(childComplexity), true
+		return e.complexity.Relation.Target(childComplexity), true
 
-	case "Relationship.type":
-		if e.complexity.Relationship.Type == nil {
+	case "Relation.type":
+		if e.complexity.Relation.Type == nil {
 			break
 		}
 
-		return e.complexity.Relationship.Type(childComplexity), true
+		return e.complexity.Relation.Type(childComplexity), true
 
-	case "Relationships.agg":
-		if e.complexity.Relationships.Agg == nil {
+	case "Relations.agg":
+		if e.complexity.Relations.Agg == nil {
 			break
 		}
 
-		args, err := ec.field_Relationships_agg_args(context.TODO(), rawArgs)
+		args, err := ec.field_Relations_agg_args(context.TODO(), rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.Relationships.Agg(childComplexity, args["agg"].(model.Aggregate), args["field"].(string)), true
+		return e.complexity.Relations.Agg(childComplexity, args["fn"].(model.AggregateFunction), args["field"].(string)), true
 
-	case "Relationships.cursor":
-		if e.complexity.Relationships.Cursor == nil {
+	case "Relations.cursor":
+		if e.complexity.Relations.Cursor == nil {
 			break
 		}
 
-		return e.complexity.Relationships.Cursor(childComplexity), true
+		return e.complexity.Relations.Cursor(childComplexity), true
 
-	case "Relationships.values":
-		if e.complexity.Relationships.Values == nil {
+	case "Relations.values":
+		if e.complexity.Relations.Values == nil {
 			break
 		}
 
-		return e.complexity.Relationships.Values(childComplexity), true
+		return e.complexity.Relations.Values(childComplexity), true
 
 	}
 	return 0, false
@@ -588,6 +588,14 @@ enum Operator {
     HAS_SUFFIX
 }
 
+enum AggregateFunction {
+    SUM
+    COUNT
+    AVG
+    MAX
+    MIN
+}
+
 input Expression {
     key: String!
     operator: Operator!
@@ -638,15 +646,15 @@ type Node implements Entity {
     getProperty(key: String!): Any
     setProperties(properties: Map!): Boolean!
     delProperty(key: String!): Boolean!
-    getRelationship(relationship: String!, id: String!): Relationship!
-    addRelationship(direction: Direction, relationship: String!, properties: Map, nodeKey: Key!): Relationship!
-    delRelationship(key: Key!): Boolean!
-    relationships(where: RelationWhere!): Relationships!
+    getRelation(relation: String!, id: String!): Relation!
+    addRelation(direction: Direction, relation: String!, properties: Map, nodeKey: Key!): Relation!
+    delRelation(key: Key!): Boolean!
+    relations(where: RelationWhere!): Relations!
     addIncomingNode(relation: String!, properties: Map, addNode: AddNode!): Node!
     addOutboundNode(relation: String!, properties: Map, addNode: AddNode!): Node!
 }
 
-type Relationship implements Entity {
+type Relation implements Entity {
     id: String!
     type: String!
     properties: Map!
@@ -657,16 +665,16 @@ type Relationship implements Entity {
     target: Node!
 }
 
-type Relationships {
+type Relations {
     cursor: String!
-    values: [Relationship!]
-    agg(agg: Aggregate!, field: String!): Float!
+    values: [Relation!]
+    agg(fn: AggregateFunction!, field: String!): Float!
 }
 
 type Nodes {
     cursor: String!
     values: [Node!]
-    agg(agg: Aggregate!, field: String!): Float!
+    agg(fn: AggregateFunction!, field: String!): Float!
 }
 
 input AddNode {
@@ -681,13 +689,6 @@ input SetNode {
     properties: Map
 }
 
-enum Aggregate {
-    SUM
-    COUNT
-    AVG
-    MAX
-    MIN
-}
 
 type Query {
     types: [String!]
@@ -779,7 +780,7 @@ func (ec *executionContext) field_Node_addOutboundNode_args(ctx context.Context,
 	return args, nil
 }
 
-func (ec *executionContext) field_Node_addRelationship_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Node_addRelation_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
 	var arg0 *model.Direction
@@ -792,14 +793,14 @@ func (ec *executionContext) field_Node_addRelationship_args(ctx context.Context,
 	}
 	args["direction"] = arg0
 	var arg1 string
-	if tmp, ok := rawArgs["relationship"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relationship"))
+	if tmp, ok := rawArgs["relation"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relation"))
 		arg1, err = ec.unmarshalNString2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["relationship"] = arg1
+	args["relation"] = arg1
 	var arg2 map[string]interface{}
 	if tmp, ok := rawArgs["properties"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("properties"))
@@ -836,7 +837,7 @@ func (ec *executionContext) field_Node_delProperty_args(ctx context.Context, raw
 	return args, nil
 }
 
-func (ec *executionContext) field_Node_delRelationship_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Node_delRelation_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
 	var arg0 model.Key
@@ -866,18 +867,18 @@ func (ec *executionContext) field_Node_getProperty_args(ctx context.Context, raw
 	return args, nil
 }
 
-func (ec *executionContext) field_Node_getRelationship_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Node_getRelation_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
 	var arg0 string
-	if tmp, ok := rawArgs["relationship"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relationship"))
+	if tmp, ok := rawArgs["relation"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relation"))
 		arg0, err = ec.unmarshalNString2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["relationship"] = arg0
+	args["relation"] = arg0
 	var arg1 string
 	if tmp, ok := rawArgs["id"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
@@ -890,7 +891,7 @@ func (ec *executionContext) field_Node_getRelationship_args(ctx context.Context,
 	return args, nil
 }
 
-func (ec *executionContext) field_Node_relationships_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Node_relations_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
 	var arg0 model.RelationWhere
@@ -923,15 +924,15 @@ func (ec *executionContext) field_Node_setProperties_args(ctx context.Context, r
 func (ec *executionContext) field_Nodes_agg_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 model.Aggregate
-	if tmp, ok := rawArgs["agg"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("agg"))
-		arg0, err = ec.unmarshalNAggregate2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAggregate(ctx, tmp)
+	var arg0 model.AggregateFunction
+	if tmp, ok := rawArgs["fn"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("fn"))
+		arg0, err = ec.unmarshalNAggregateFunction2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAggregateFunction(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["agg"] = arg0
+	args["fn"] = arg0
 	var arg1 string
 	if tmp, ok := rawArgs["field"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("field"))
@@ -1103,7 +1104,7 @@ func (ec *executionContext) field_Query_set_args(ctx context.Context, rawArgs ma
 	return args, nil
 }
 
-func (ec *executionContext) field_Relationship_delProperty_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Relation_delProperty_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
 	var arg0 string
@@ -1118,7 +1119,7 @@ func (ec *executionContext) field_Relationship_delProperty_args(ctx context.Cont
 	return args, nil
 }
 
-func (ec *executionContext) field_Relationship_getProperty_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Relation_getProperty_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
 	var arg0 string
@@ -1133,7 +1134,7 @@ func (ec *executionContext) field_Relationship_getProperty_args(ctx context.Cont
 	return args, nil
 }
 
-func (ec *executionContext) field_Relationship_setProperties_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Relation_setProperties_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
 	var arg0 map[string]interface{}
@@ -1148,18 +1149,18 @@ func (ec *executionContext) field_Relationship_setProperties_args(ctx context.Co
 	return args, nil
 }
 
-func (ec *executionContext) field_Relationships_agg_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Relations_agg_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 model.Aggregate
-	if tmp, ok := rawArgs["agg"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("agg"))
-		arg0, err = ec.unmarshalNAggregate2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAggregate(ctx, tmp)
+	var arg0 model.AggregateFunction
+	if tmp, ok := rawArgs["fn"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("fn"))
+		arg0, err = ec.unmarshalNAggregateFunction2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAggregateFunction(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["agg"] = arg0
+	args["fn"] = arg0
 	var arg1 string
 	if tmp, ok := rawArgs["field"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("field"))
@@ -1438,7 +1439,7 @@ func (ec *executionContext) _Node_delProperty(ctx context.Context, field graphql
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Node_getRelationship(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
+func (ec *executionContext) _Node_getRelation(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -1455,7 +1456,7 @@ func (ec *executionContext) _Node_getRelationship(ctx context.Context, field gra
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Node_getRelationship_args(ctx, rawArgs)
+	args, err := ec.field_Node_getRelation_args(ctx, rawArgs)
 	if err != nil {
 		ec.Error(ctx, err)
 		return graphql.Null
@@ -1463,7 +1464,7 @@ func (ec *executionContext) _Node_getRelationship(ctx context.Context, field gra
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Node().GetRelationship(rctx, obj, args["relationship"].(string), args["id"].(string))
+		return ec.resolvers.Node().GetRelation(rctx, obj, args["relation"].(string), args["id"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1475,12 +1476,12 @@ func (ec *executionContext) _Node_getRelationship(ctx context.Context, field gra
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.Relationship)
+	res := resTmp.(*model.Relation)
 	fc.Result = res
-	return ec.marshalNRelationship2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationship(ctx, field.Selections, res)
+	return ec.marshalNRelation2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelation(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Node_addRelationship(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
+func (ec *executionContext) _Node_addRelation(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -1497,7 +1498,7 @@ func (ec *executionContext) _Node_addRelationship(ctx context.Context, field gra
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Node_addRelationship_args(ctx, rawArgs)
+	args, err := ec.field_Node_addRelation_args(ctx, rawArgs)
 	if err != nil {
 		ec.Error(ctx, err)
 		return graphql.Null
@@ -1505,7 +1506,7 @@ func (ec *executionContext) _Node_addRelationship(ctx context.Context, field gra
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Node().AddRelationship(rctx, obj, args["direction"].(*model.Direction), args["relationship"].(string), args["properties"].(map[string]interface{}), args["nodeKey"].(model.Key))
+		return ec.resolvers.Node().AddRelation(rctx, obj, args["direction"].(*model.Direction), args["relation"].(string), args["properties"].(map[string]interface{}), args["nodeKey"].(model.Key))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1517,12 +1518,12 @@ func (ec *executionContext) _Node_addRelationship(ctx context.Context, field gra
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.Relationship)
+	res := resTmp.(*model.Relation)
 	fc.Result = res
-	return ec.marshalNRelationship2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationship(ctx, field.Selections, res)
+	return ec.marshalNRelation2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelation(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Node_delRelationship(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
+func (ec *executionContext) _Node_delRelation(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -1539,7 +1540,7 @@ func (ec *executionContext) _Node_delRelationship(ctx context.Context, field gra
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Node_delRelationship_args(ctx, rawArgs)
+	args, err := ec.field_Node_delRelation_args(ctx, rawArgs)
 	if err != nil {
 		ec.Error(ctx, err)
 		return graphql.Null
@@ -1547,7 +1548,7 @@ func (ec *executionContext) _Node_delRelationship(ctx context.Context, field gra
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Node().DelRelationship(rctx, obj, args["key"].(model.Key))
+		return ec.resolvers.Node().DelRelation(rctx, obj, args["key"].(model.Key))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1564,7 +1565,7 @@ func (ec *executionContext) _Node_delRelationship(ctx context.Context, field gra
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Node_relationships(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
+func (ec *executionContext) _Node_relations(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -1581,7 +1582,7 @@ func (ec *executionContext) _Node_relationships(ctx context.Context, field graph
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Node_relationships_args(ctx, rawArgs)
+	args, err := ec.field_Node_relations_args(ctx, rawArgs)
 	if err != nil {
 		ec.Error(ctx, err)
 		return graphql.Null
@@ -1589,7 +1590,7 @@ func (ec *executionContext) _Node_relationships(ctx context.Context, field graph
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Node().Relationships(rctx, obj, args["where"].(model.RelationWhere))
+		return ec.resolvers.Node().Relations(rctx, obj, args["where"].(model.RelationWhere))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1601,9 +1602,9 @@ func (ec *executionContext) _Node_relationships(ctx context.Context, field graph
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.Relationships)
+	res := resTmp.(*model.Relations)
 	fc.Result = res
-	return ec.marshalNRelationships2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationships(ctx, field.Selections, res)
+	return ec.marshalNRelations2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelations(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Node_addIncomingNode(ctx context.Context, field graphql.CollectedField, obj *model.Node) (ret graphql.Marshaler) {
@@ -1782,7 +1783,7 @@ func (ec *executionContext) _Nodes_agg(ctx context.Context, field graphql.Collec
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Nodes().Agg(rctx, obj, args["agg"].(model.Aggregate), args["field"].(string))
+		return ec.resolvers.Nodes().Agg(rctx, obj, args["fn"].(model.AggregateFunction), args["field"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2280,7 +2281,7 @@ func (ec *executionContext) _Query___schema(ctx context.Context, field graphql.C
 	return ec.marshalO__Schema2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐSchema(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Relationship_id(ctx context.Context, field graphql.CollectedField, obj *model.Relationship) (ret graphql.Marshaler) {
+func (ec *executionContext) _Relation_id(ctx context.Context, field graphql.CollectedField, obj *model.Relation) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2288,7 +2289,7 @@ func (ec *executionContext) _Relationship_id(ctx context.Context, field graphql.
 		}
 	}()
 	fc := &graphql.FieldContext{
-		Object:     "Relationship",
+		Object:     "Relation",
 		Field:      field,
 		Args:       nil,
 		IsMethod:   false,
@@ -2315,7 +2316,7 @@ func (ec *executionContext) _Relationship_id(ctx context.Context, field graphql.
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Relationship_type(ctx context.Context, field graphql.CollectedField, obj *model.Relationship) (ret graphql.Marshaler) {
+func (ec *executionContext) _Relation_type(ctx context.Context, field graphql.CollectedField, obj *model.Relation) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2323,7 +2324,7 @@ func (ec *executionContext) _Relationship_type(ctx context.Context, field graphq
 		}
 	}()
 	fc := &graphql.FieldContext{
-		Object:     "Relationship",
+		Object:     "Relation",
 		Field:      field,
 		Args:       nil,
 		IsMethod:   false,
@@ -2350,7 +2351,7 @@ func (ec *executionContext) _Relationship_type(ctx context.Context, field graphq
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Relationship_properties(ctx context.Context, field graphql.CollectedField, obj *model.Relationship) (ret graphql.Marshaler) {
+func (ec *executionContext) _Relation_properties(ctx context.Context, field graphql.CollectedField, obj *model.Relation) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2358,7 +2359,7 @@ func (ec *executionContext) _Relationship_properties(ctx context.Context, field 
 		}
 	}()
 	fc := &graphql.FieldContext{
-		Object:     "Relationship",
+		Object:     "Relation",
 		Field:      field,
 		Args:       nil,
 		IsMethod:   true,
@@ -2368,7 +2369,7 @@ func (ec *executionContext) _Relationship_properties(ctx context.Context, field 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Relationship().Properties(rctx, obj)
+		return ec.resolvers.Relation().Properties(rctx, obj)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2385,7 +2386,7 @@ func (ec *executionContext) _Relationship_properties(ctx context.Context, field 
 	return ec.marshalNMap2map(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Relationship_getProperty(ctx context.Context, field graphql.CollectedField, obj *model.Relationship) (ret graphql.Marshaler) {
+func (ec *executionContext) _Relation_getProperty(ctx context.Context, field graphql.CollectedField, obj *model.Relation) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2393,7 +2394,7 @@ func (ec *executionContext) _Relationship_getProperty(ctx context.Context, field
 		}
 	}()
 	fc := &graphql.FieldContext{
-		Object:     "Relationship",
+		Object:     "Relation",
 		Field:      field,
 		Args:       nil,
 		IsMethod:   true,
@@ -2402,7 +2403,7 @@ func (ec *executionContext) _Relationship_getProperty(ctx context.Context, field
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Relationship_getProperty_args(ctx, rawArgs)
+	args, err := ec.field_Relation_getProperty_args(ctx, rawArgs)
 	if err != nil {
 		ec.Error(ctx, err)
 		return graphql.Null
@@ -2410,7 +2411,7 @@ func (ec *executionContext) _Relationship_getProperty(ctx context.Context, field
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Relationship().GetProperty(rctx, obj, args["key"].(string))
+		return ec.resolvers.Relation().GetProperty(rctx, obj, args["key"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2424,7 +2425,7 @@ func (ec *executionContext) _Relationship_getProperty(ctx context.Context, field
 	return ec.marshalOAny2interface(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Relationship_setProperties(ctx context.Context, field graphql.CollectedField, obj *model.Relationship) (ret graphql.Marshaler) {
+func (ec *executionContext) _Relation_setProperties(ctx context.Context, field graphql.CollectedField, obj *model.Relation) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2432,7 +2433,7 @@ func (ec *executionContext) _Relationship_setProperties(ctx context.Context, fie
 		}
 	}()
 	fc := &graphql.FieldContext{
-		Object:     "Relationship",
+		Object:     "Relation",
 		Field:      field,
 		Args:       nil,
 		IsMethod:   true,
@@ -2441,7 +2442,7 @@ func (ec *executionContext) _Relationship_setProperties(ctx context.Context, fie
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Relationship_setProperties_args(ctx, rawArgs)
+	args, err := ec.field_Relation_setProperties_args(ctx, rawArgs)
 	if err != nil {
 		ec.Error(ctx, err)
 		return graphql.Null
@@ -2449,7 +2450,7 @@ func (ec *executionContext) _Relationship_setProperties(ctx context.Context, fie
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Relationship().SetProperties(rctx, obj, args["properties"].(map[string]interface{}))
+		return ec.resolvers.Relation().SetProperties(rctx, obj, args["properties"].(map[string]interface{}))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2466,7 +2467,7 @@ func (ec *executionContext) _Relationship_setProperties(ctx context.Context, fie
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Relationship_delProperty(ctx context.Context, field graphql.CollectedField, obj *model.Relationship) (ret graphql.Marshaler) {
+func (ec *executionContext) _Relation_delProperty(ctx context.Context, field graphql.CollectedField, obj *model.Relation) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2474,7 +2475,7 @@ func (ec *executionContext) _Relationship_delProperty(ctx context.Context, field
 		}
 	}()
 	fc := &graphql.FieldContext{
-		Object:     "Relationship",
+		Object:     "Relation",
 		Field:      field,
 		Args:       nil,
 		IsMethod:   false,
@@ -2483,7 +2484,7 @@ func (ec *executionContext) _Relationship_delProperty(ctx context.Context, field
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Relationship_delProperty_args(ctx, rawArgs)
+	args, err := ec.field_Relation_delProperty_args(ctx, rawArgs)
 	if err != nil {
 		ec.Error(ctx, err)
 		return graphql.Null
@@ -2508,7 +2509,7 @@ func (ec *executionContext) _Relationship_delProperty(ctx context.Context, field
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Relationship_source(ctx context.Context, field graphql.CollectedField, obj *model.Relationship) (ret graphql.Marshaler) {
+func (ec *executionContext) _Relation_source(ctx context.Context, field graphql.CollectedField, obj *model.Relation) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2516,7 +2517,7 @@ func (ec *executionContext) _Relationship_source(ctx context.Context, field grap
 		}
 	}()
 	fc := &graphql.FieldContext{
-		Object:     "Relationship",
+		Object:     "Relation",
 		Field:      field,
 		Args:       nil,
 		IsMethod:   false,
@@ -2543,7 +2544,7 @@ func (ec *executionContext) _Relationship_source(ctx context.Context, field grap
 	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Relationship_target(ctx context.Context, field graphql.CollectedField, obj *model.Relationship) (ret graphql.Marshaler) {
+func (ec *executionContext) _Relation_target(ctx context.Context, field graphql.CollectedField, obj *model.Relation) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2551,7 +2552,7 @@ func (ec *executionContext) _Relationship_target(ctx context.Context, field grap
 		}
 	}()
 	fc := &graphql.FieldContext{
-		Object:     "Relationship",
+		Object:     "Relation",
 		Field:      field,
 		Args:       nil,
 		IsMethod:   false,
@@ -2578,7 +2579,7 @@ func (ec *executionContext) _Relationship_target(ctx context.Context, field grap
 	return ec.marshalNNode2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNode(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Relationships_cursor(ctx context.Context, field graphql.CollectedField, obj *model.Relationships) (ret graphql.Marshaler) {
+func (ec *executionContext) _Relations_cursor(ctx context.Context, field graphql.CollectedField, obj *model.Relations) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2586,7 +2587,7 @@ func (ec *executionContext) _Relationships_cursor(ctx context.Context, field gra
 		}
 	}()
 	fc := &graphql.FieldContext{
-		Object:     "Relationships",
+		Object:     "Relations",
 		Field:      field,
 		Args:       nil,
 		IsMethod:   false,
@@ -2613,7 +2614,7 @@ func (ec *executionContext) _Relationships_cursor(ctx context.Context, field gra
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Relationships_values(ctx context.Context, field graphql.CollectedField, obj *model.Relationships) (ret graphql.Marshaler) {
+func (ec *executionContext) _Relations_values(ctx context.Context, field graphql.CollectedField, obj *model.Relations) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2621,7 +2622,7 @@ func (ec *executionContext) _Relationships_values(ctx context.Context, field gra
 		}
 	}()
 	fc := &graphql.FieldContext{
-		Object:     "Relationships",
+		Object:     "Relations",
 		Field:      field,
 		Args:       nil,
 		IsMethod:   false,
@@ -2640,12 +2641,12 @@ func (ec *executionContext) _Relationships_values(ctx context.Context, field gra
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.([]*model.Relationship)
+	res := resTmp.([]*model.Relation)
 	fc.Result = res
-	return ec.marshalORelationship2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationshipᚄ(ctx, field.Selections, res)
+	return ec.marshalORelation2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Relationships_agg(ctx context.Context, field graphql.CollectedField, obj *model.Relationships) (ret graphql.Marshaler) {
+func (ec *executionContext) _Relations_agg(ctx context.Context, field graphql.CollectedField, obj *model.Relations) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -2653,7 +2654,7 @@ func (ec *executionContext) _Relationships_agg(ctx context.Context, field graphq
 		}
 	}()
 	fc := &graphql.FieldContext{
-		Object:     "Relationships",
+		Object:     "Relations",
 		Field:      field,
 		Args:       nil,
 		IsMethod:   true,
@@ -2662,7 +2663,7 @@ func (ec *executionContext) _Relationships_agg(ctx context.Context, field graphq
 
 	ctx = graphql.WithFieldContext(ctx, fc)
 	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Relationships_agg_args(ctx, rawArgs)
+	args, err := ec.field_Relations_agg_args(ctx, rawArgs)
 	if err != nil {
 		ec.Error(ctx, err)
 		return graphql.Null
@@ -2670,7 +2671,7 @@ func (ec *executionContext) _Relationships_agg(ctx context.Context, field graphq
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Relationships().Agg(rctx, obj, args["agg"].(model.Aggregate), args["field"].(string))
+		return ec.resolvers.Relations().Agg(rctx, obj, args["fn"].(model.AggregateFunction), args["field"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -4193,13 +4194,13 @@ func (ec *executionContext) _Entity(ctx context.Context, sel ast.SelectionSet, o
 			return graphql.Null
 		}
 		return ec._Node(ctx, sel, obj)
-	case model.Relationship:
-		return ec._Relationship(ctx, sel, &obj)
-	case *model.Relationship:
+	case model.Relation:
+		return ec._Relation(ctx, sel, &obj)
+	case *model.Relation:
 		if obj == nil {
 			return graphql.Null
 		}
-		return ec._Relationship(ctx, sel, obj)
+		return ec._Relation(ctx, sel, obj)
 	default:
 		panic(fmt.Errorf("unexpected type %T", obj))
 	}
@@ -4306,7 +4307,7 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&invalids, 1)
 			}
-		case "getRelationship":
+		case "getRelation":
 			field := field
 
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -4315,7 +4316,7 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Node_getRelationship(ctx, field, obj)
+				res = ec._Node_getRelation(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -4326,7 +4327,7 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 				return innerFunc(ctx)
 
 			})
-		case "addRelationship":
+		case "addRelation":
 			field := field
 
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -4335,7 +4336,7 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Node_addRelationship(ctx, field, obj)
+				res = ec._Node_addRelation(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -4346,7 +4347,7 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 				return innerFunc(ctx)
 
 			})
-		case "delRelationship":
+		case "delRelation":
 			field := field
 
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -4355,7 +4356,7 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Node_delRelationship(ctx, field, obj)
+				res = ec._Node_delRelation(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -4366,7 +4367,7 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 				return innerFunc(ctx)
 
 			})
-		case "relationships":
+		case "relations":
 			field := field
 
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -4375,7 +4376,7 @@ func (ec *executionContext) _Node(ctx context.Context, sel ast.SelectionSet, obj
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Node_relationships(ctx, field, obj)
+				res = ec._Node_relations(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -4766,19 +4767,19 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 	return out
 }
 
-var relationshipImplementors = []string{"Relationship", "Entity"}
+var relationImplementors = []string{"Relation", "Entity"}
 
-func (ec *executionContext) _Relationship(ctx context.Context, sel ast.SelectionSet, obj *model.Relationship) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, relationshipImplementors)
+func (ec *executionContext) _Relation(ctx context.Context, sel ast.SelectionSet, obj *model.Relation) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, relationImplementors)
 	out := graphql.NewFieldSet(fields)
 	var invalids uint32
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
-			out.Values[i] = graphql.MarshalString("Relationship")
+			out.Values[i] = graphql.MarshalString("Relation")
 		case "id":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Relationship_id(ctx, field, obj)
+				return ec._Relation_id(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)
@@ -4788,7 +4789,7 @@ func (ec *executionContext) _Relationship(ctx context.Context, sel ast.Selection
 			}
 		case "type":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Relationship_type(ctx, field, obj)
+				return ec._Relation_type(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)
@@ -4805,7 +4806,7 @@ func (ec *executionContext) _Relationship(ctx context.Context, sel ast.Selection
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Relationship_properties(ctx, field, obj)
+				res = ec._Relation_properties(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -4825,7 +4826,7 @@ func (ec *executionContext) _Relationship(ctx context.Context, sel ast.Selection
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Relationship_getProperty(ctx, field, obj)
+				res = ec._Relation_getProperty(ctx, field, obj)
 				return res
 			}
 
@@ -4842,7 +4843,7 @@ func (ec *executionContext) _Relationship(ctx context.Context, sel ast.Selection
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Relationship_setProperties(ctx, field, obj)
+				res = ec._Relation_setProperties(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -4855,7 +4856,7 @@ func (ec *executionContext) _Relationship(ctx context.Context, sel ast.Selection
 			})
 		case "delProperty":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Relationship_delProperty(ctx, field, obj)
+				return ec._Relation_delProperty(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)
@@ -4865,7 +4866,7 @@ func (ec *executionContext) _Relationship(ctx context.Context, sel ast.Selection
 			}
 		case "source":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Relationship_source(ctx, field, obj)
+				return ec._Relation_source(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)
@@ -4875,7 +4876,7 @@ func (ec *executionContext) _Relationship(ctx context.Context, sel ast.Selection
 			}
 		case "target":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Relationship_target(ctx, field, obj)
+				return ec._Relation_target(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)
@@ -4894,19 +4895,19 @@ func (ec *executionContext) _Relationship(ctx context.Context, sel ast.Selection
 	return out
 }
 
-var relationshipsImplementors = []string{"Relationships"}
+var relationsImplementors = []string{"Relations"}
 
-func (ec *executionContext) _Relationships(ctx context.Context, sel ast.SelectionSet, obj *model.Relationships) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, relationshipsImplementors)
+func (ec *executionContext) _Relations(ctx context.Context, sel ast.SelectionSet, obj *model.Relations) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, relationsImplementors)
 	out := graphql.NewFieldSet(fields)
 	var invalids uint32
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
-			out.Values[i] = graphql.MarshalString("Relationships")
+			out.Values[i] = graphql.MarshalString("Relations")
 		case "cursor":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Relationships_cursor(ctx, field, obj)
+				return ec._Relations_cursor(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)
@@ -4916,7 +4917,7 @@ func (ec *executionContext) _Relationships(ctx context.Context, sel ast.Selectio
 			}
 		case "values":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Relationships_values(ctx, field, obj)
+				return ec._Relations_values(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)
@@ -4930,7 +4931,7 @@ func (ec *executionContext) _Relationships(ctx context.Context, sel ast.Selectio
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Relationships_agg(ctx, field, obj)
+				res = ec._Relations_agg(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -5385,13 +5386,13 @@ func (ec *executionContext) unmarshalNAddNode2ᚖgithubᚗcomᚋautom8terᚋmorp
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) unmarshalNAggregate2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAggregate(ctx context.Context, v interface{}) (model.Aggregate, error) {
-	var res model.Aggregate
+func (ec *executionContext) unmarshalNAggregateFunction2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAggregateFunction(ctx context.Context, v interface{}) (model.AggregateFunction, error) {
+	var res model.AggregateFunction
 	err := res.UnmarshalGQL(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNAggregate2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAggregate(ctx context.Context, sel ast.SelectionSet, v model.Aggregate) graphql.Marshaler {
+func (ec *executionContext) marshalNAggregateFunction2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAggregateFunction(ctx context.Context, sel ast.SelectionSet, v model.AggregateFunction) graphql.Marshaler {
 	return v
 }
 
@@ -5535,37 +5536,37 @@ func (ec *executionContext) marshalNOperator2githubᚗcomᚋautom8terᚋmorpheus
 	return v
 }
 
+func (ec *executionContext) marshalNRelation2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelation(ctx context.Context, sel ast.SelectionSet, v model.Relation) graphql.Marshaler {
+	return ec._Relation(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNRelation2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelation(ctx context.Context, sel ast.SelectionSet, v *model.Relation) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Relation(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNRelationWhere2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationWhere(ctx context.Context, v interface{}) (model.RelationWhere, error) {
 	res, err := ec.unmarshalInputRelationWhere(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNRelationship2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationship(ctx context.Context, sel ast.SelectionSet, v model.Relationship) graphql.Marshaler {
-	return ec._Relationship(ctx, sel, &v)
+func (ec *executionContext) marshalNRelations2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelations(ctx context.Context, sel ast.SelectionSet, v model.Relations) graphql.Marshaler {
+	return ec._Relations(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNRelationship2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationship(ctx context.Context, sel ast.SelectionSet, v *model.Relationship) graphql.Marshaler {
+func (ec *executionContext) marshalNRelations2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelations(ctx context.Context, sel ast.SelectionSet, v *model.Relations) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "must not be null")
 		}
 		return graphql.Null
 	}
-	return ec._Relationship(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalNRelationships2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationships(ctx context.Context, sel ast.SelectionSet, v model.Relationships) graphql.Marshaler {
-	return ec._Relationships(ctx, sel, &v)
-}
-
-func (ec *executionContext) marshalNRelationships2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationships(ctx context.Context, sel ast.SelectionSet, v *model.Relationships) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	return ec._Relationships(ctx, sel, v)
+	return ec._Relations(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNSetNode2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐSetNode(ctx context.Context, v interface{}) (model.SetNode, error) {
@@ -6051,7 +6052,7 @@ func (ec *executionContext) unmarshalOOrderBy2ᚖgithubᚗcomᚋautom8terᚋmorp
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalORelationship2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationshipᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Relationship) graphql.Marshaler {
+func (ec *executionContext) marshalORelation2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Relation) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
@@ -6078,7 +6079,7 @@ func (ec *executionContext) marshalORelationship2ᚕᚖgithubᚗcomᚋautom8ter�
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNRelationship2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationship(ctx, sel, v[i])
+			ret[i] = ec.marshalNRelation2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelation(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)

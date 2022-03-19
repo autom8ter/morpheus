@@ -88,7 +88,7 @@ func (d *DB) FSM() raft.FSM {
 				var (
 					sourceType = cmd.Metadata["source.type"]
 					sourceID   = cmd.Metadata["source.id"]
-					relation   = cmd.Metadata["relationship"]
+					relation   = cmd.Metadata["relation"]
 					direction  = cmd.Metadata["direction"]
 				)
 				if sourceType == "" || sourceID == "" || relation == "" || direction == "" {
@@ -102,7 +102,7 @@ func (d *DB) FSM() raft.FSM {
 				if err != nil {
 					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
-				rel, err := source.AddRelationship(api.Direction(direction), relation, cmd.Properties, target)
+				rel, err := source.AddRelation(api.Direction(direction), relation, cmd.Properties, target)
 				if err != nil {
 					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
@@ -117,7 +117,7 @@ func (d *DB) FSM() raft.FSM {
 				if err != nil {
 					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
-				err = source.DelRelationship(key.Type, key.ID)
+				err = source.DelRelation(key.Type, key.ID)
 				if err != nil {
 					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}
@@ -131,7 +131,7 @@ func (d *DB) FSM() raft.FSM {
 					return stacktrace.NewError("bad raft cmd")
 				}
 				props := cmd.Properties
-				rel, err := d.GetRelationship(sourceType, sourceID)
+				rel, err := d.GetRelation(sourceType, sourceID)
 				if err != nil {
 					return stacktrace.Propagate(err, "command = %s", helpers.JSONString(cmd))
 				}

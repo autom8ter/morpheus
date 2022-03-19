@@ -32,13 +32,13 @@ type Entity interface {
 
 type Node interface {
 	Entity
-	AddRelationship(direction Direction, relationship string, properties map[string]interface{}, node Node) (Relationship, error)
-	DelRelationship(relationship string, id string) error
-	GetRelationship(relation, id string) (Relationship, bool, error)
-	Relationships(where *model.RelationWhere) (string, []Relationship, error)
+	AddRelation(direction Direction, relation string, properties map[string]interface{}, node Node) (Relation, error)
+	DelRelation(relation string, id string) error
+	GetRelation(relation, id string) (Relation, bool, error)
+	Relations(where *model.RelationWhere) (string, []Relation, error)
 }
 
-type Relationship interface {
+type Relation interface {
 	Entity
 	Source() (Node, error)
 	Target() (Node, error)
@@ -51,9 +51,9 @@ type Graph interface {
 	RangeNodes(where *model.NodeWhere) (string, []Node, error)
 	NodeTypes() []string
 
-	GetRelationship(relation string, id string) (Relationship, error)
-	RangeRelationships(where *model.RelationWhere) (string, []Relationship, error)
-	RelationshipTypes() []string
+	GetRelation(relation string, id string) (Relation, error)
+	RangeRelations(where *model.RelationWhere) (string, []Relation, error)
+	RelationTypes() []string
 
 	Close() error
 	FSM() raft.FSM

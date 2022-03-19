@@ -62,19 +62,19 @@ models:
         resolver: true
       setProperties:
         resolver: true
-      addRelationship:
+      addRelation:
         resolver: true
-      delRelationship:
+      delRelation:
         resolver: true
-      relationships:
+      relations:
         resolver: true
-      getRelationship:
+      getRelation:
         resolver: true
       addIncomingNode:
         resolver: true
       addOutboundNode:
         resolver: true
-  Relationship:
+  Relation:
     fields:
       properties:
         resolver: true
@@ -86,7 +86,7 @@ models:
     fields:
       agg:
         resolver: true
-  Relationships:
+  Relations:
     fields:
       agg:
         resolver: true

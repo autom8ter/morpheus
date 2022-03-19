@@ -13,28 +13,26 @@ import (
 )
 
 var (
-	nodesPrefix          InternalProperty = "1"
-	relationshipPrefix   InternalProperty = "2"
-	nodeRelationPrefix   InternalProperty = "3"
-	nodeFieldsPrefix     InternalProperty = "4"
-	relationFieldsPrefix InternalProperty = "5"
+	nodesPrefix          = "1"
+	relationPrefix       = "2"
+	nodeRelationPrefix   = "3"
+	nodeFieldsPrefix     = "4"
+	relationFieldsPrefix = "5"
 )
 
 const (
 	prefetchSize = 25
 )
 
-type InternalProperty string
-
 const (
-	ID         = "_id"
-	Type       = "_type"
-	Direction  = "_direction"
-	Relation   = "_relation"
-	SourceType = "_source_type"
-	SourceID   = "_source_id"
-	TargetType = "_target_type"
-	TargetID   = "_target_id"
+	Internal_ID         = "_id"
+	Internal_Type       = "_type"
+	Internal_Direction  = "_direction"
+	Internal_Relation   = "_relation"
+	Internal_SourceType = "_source_type"
+	Internal_SourceID   = "_source_id"
+	Internal_TargetType = "_target_type"
+	Internal_TargetID   = "_target_id"
 )
 
 func getNodePath(typee, id string) []byte {
@@ -48,7 +46,7 @@ func getNodePath(typee, id string) []byte {
 	return []byte(strings.Join(key, ","))
 }
 
-func getNodeRelationshipPath(sourceType, sourceID string, direction api.Direction, relation, targetType, targetID, relationID string) []byte {
+func getNodeRelationPath(sourceType, sourceID string, direction api.Direction, relation, targetType, targetID, relationID string) []byte {
 	key := append([]string{string(nodeRelationPrefix)}, sourceType, sourceID, string(direction), relation, targetType)
 	if targetID != "" {
 		key = append(key, targetID)
@@ -67,8 +65,8 @@ func getRelationID(sourceType, sourceID string, relation, targetType, targetID s
 	return hex.EncodeToString(id)
 }
 
-func getRelationshipPath(relation, id string) []byte {
-	key := append([]string{string(relationshipPrefix)}, relation, id)
+func getRelationPath(relation, id string) []byte {
+	key := append([]string{string(relationPrefix)}, relation, id)
 	return []byte(strings.Join(key, ","))
 }
 
@@ -83,7 +81,7 @@ func getNodeTypeFieldPath(nodeType, field string, fieldValue interface{}, nodeID
 	return []byte(strings.Join(key, ","))
 }
 
-func getRelationshipFieldPath(relation, field string, fieldValue interface{}, relationID string) []byte {
+func getRelationFieldPath(relation, field string, fieldValue interface{}, relationID string) []byte {
 	key := append([]string{string(relationFieldsPrefix)}, relation, field, fmt.Sprint(fieldValue), relationID)
 	return []byte(strings.Join(key, ","))
 }
@@ -111,7 +109,7 @@ func eval(exp *model.Expression, ent api.Entity) (bool, error) {
 		return false, err
 	}
 	switch v := ent.(type) {
-	case api.Relationship:
+	case api.Relation:
 		if strings.HasPrefix(exp.Key, "_source.") {
 			source, err := v.Source()
 			if err != nil {

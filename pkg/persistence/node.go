@@ -85,13 +85,13 @@ func (n Node) DelProperty(name string) error {
 	return nil
 }
 
-func (n Node) AddRelationship(direction api.Direction, relationship string, properties map[string]interface{}, node api.Node) (api.Relationship, error) {
+func (n Node) AddRelation(direction api.Direction, relation string, properties map[string]interface{}, node api.Node) (api.Relation, error) {
 	if properties == nil {
 		properties = map[string]interface{}{}
 	}
-	relID := getRelationID(n.Type(), n.ID(), relationship, node.Type(), node.ID())
-	n.db.relationshipTypes.Store(relationship, struct{}{})
-	rkey := getRelationshipPath(relationship, relID)
+	relID := getRelationID(n.Type(), n.ID(), relation, node.Type(), node.ID())
+	n.db.relationTypes.Store(relation, struct{}{})
+	rkey := getRelationPath(relation, relID)
 	var sourceNode api.Node
 	var targetNode api.Node
 	if direction == api.Outgoing {
@@ -101,17 +101,17 @@ func (n Node) AddRelationship(direction api.Direction, relationship string, prop
 		targetNode = n
 		sourceNode = node
 	}
-	source := getNodeRelationshipPath(sourceNode.Type(), sourceNode.ID(), direction, relationship, targetNode.Type(), targetNode.ID(), relID)
-	target := getNodeRelationshipPath(targetNode.Type(), targetNode.ID(), direction.Opposite(), relationship, sourceNode.Type(), sourceNode.ID(), relID)
+	source := getNodeRelationPath(sourceNode.Type(), sourceNode.ID(), direction, relation, targetNode.Type(), targetNode.ID(), relID)
+	target := getNodeRelationPath(targetNode.Type(), targetNode.ID(), direction.Opposite(), relation, sourceNode.Type(), sourceNode.ID(), relID)
 
-	properties[Direction] = direction
-	properties[SourceType] = sourceNode.Type()
-	properties[SourceID] = sourceNode.ID()
-	properties[TargetType] = targetNode.Type()
-	properties[TargetID] = targetNode.ID()
-	properties[ID] = relID
-	properties[Relation] = relationship
-	properties[Type] = relationship
+	properties[Internal_Direction] = direction
+	properties[Internal_SourceType] = sourceNode.Type()
+	properties[Internal_SourceID] = sourceNode.ID()
+	properties[Internal_TargetType] = targetNode.Type()
+	properties[Internal_TargetID] = targetNode.ID()
+	properties[Internal_ID] = relID
+	properties[Internal_Relation] = relation
+	properties[Internal_Type] = relation
 
 	bits, err := encode.Marshal(&properties)
 	if err != nil {
@@ -128,8 +128,8 @@ func (n Node) AddRelationship(direction api.Direction, relationship string, prop
 			return stacktrace.Propagate(err, "")
 		}
 		for k, v := range properties {
-			n.db.relationshipFieldMap.Store(strings.Join([]string{relationship, k}, ","), struct{}{})
-			key := getRelationshipFieldPath(relationship, k, v, relID)
+			n.db.relationFieldMap.Store(strings.Join([]string{relation, k}, ","), struct{}{})
+			key := getRelationFieldPath(relation, k, v, relID)
 			if err := txn.Set(key, bits); err != nil {
 				return stacktrace.Propagate(err, "")
 			}
@@ -138,18 +138,18 @@ func (n Node) AddRelationship(direction api.Direction, relationship string, prop
 	}); err != nil {
 		return nil, stacktrace.Propagate(err, "")
 	}
-	r := &Relationship{
-		relationshipType: relationship,
-		relationshipID:   relID,
-		item:             properties,
-		db:               n.db,
+	r := &Relation{
+		relationType: relation,
+		relationID:   relID,
+		item:         properties,
+		db:           n.db,
 	}
 	n.db.cache.Set(string(rkey), r, 1)
 	return r, nil
 }
 
-func (n Node) DelRelationship(relationship string, id string) error {
-	rel, ok, err := n.GetRelationship(relationship, id)
+func (n Node) DelRelation(relation string, id string) error {
+	rel, ok, err := n.GetRelation(relation, id)
 	if err != nil {
 		return stacktrace.Propagate(err, "")
 	}
@@ -161,9 +161,9 @@ func (n Node) DelRelationship(relationship string, id string) error {
 		return stacktrace.Propagate(err, "")
 	}
 
-	rkey := getRelationshipPath(rel.Type(), rel.ID())
-	source := getNodeRelationshipPath(n.Type(), n.ID(), api.Outgoing, relationship, targetNode.Type(), targetNode.ID(), rel.ID())
-	target := getNodeRelationshipPath(targetNode.Type(), targetNode.ID(), api.Incoming, relationship, n.Type(), n.ID(), rel.ID())
+	rkey := getRelationPath(rel.Type(), rel.ID())
+	source := getNodeRelationPath(n.Type(), n.ID(), api.Outgoing, relation, targetNode.Type(), targetNode.ID(), rel.ID())
+	target := getNodeRelationPath(targetNode.Type(), targetNode.ID(), api.Incoming, relation, n.Type(), n.ID(), rel.ID())
 	if err := n.db.db.Update(func(txn *badger.Txn) error {
 		if err := txn.Delete(rkey); err != nil {
 			return stacktrace.Propagate(err, "")
@@ -180,7 +180,7 @@ func (n Node) DelRelationship(relationship string, id string) error {
 		}
 		if err := n.db.db.View(func(txn *badger.Txn) error {
 			for k, v := range props {
-				key := getRelationshipFieldPath(rel.Type(), k, v, rel.ID())
+				key := getRelationFieldPath(rel.Type(), k, v, rel.ID())
 				if err := txn.Delete(key); err != nil {
 					return stacktrace.Propagate(err, "")
 				}
@@ -197,17 +197,17 @@ func (n Node) DelRelationship(relationship string, id string) error {
 	return nil
 }
 
-func (n Node) GetRelationship(relation, id string) (api.Relationship, bool, error) {
-	rkey := getRelationshipPath(relation, id)
+func (n Node) GetRelation(relation, id string) (api.Relation, bool, error) {
+	rkey := getRelationPath(relation, id)
 	if val, ok := n.db.cache.Get(string(rkey)); ok {
-		return val.(api.Relationship), true, nil
+		return val.(api.Relation), true, nil
 	}
 
-	rel := &Relationship{
-		relationshipType: relation,
-		relationshipID:   id,
-		item:             map[string]interface{}{},
-		db:               n.db,
+	rel := &Relation{
+		relationType: relation,
+		relationID:   id,
+		item:         map[string]interface{}{},
+		db:           n.db,
 	}
 	if err := n.db.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(rkey)
@@ -229,13 +229,13 @@ func (n Node) GetRelationship(relation, id string) (api.Relationship, bool, erro
 	return rel, true, nil
 }
 
-func (n Node) Relationships(where *model.RelationWhere) (string, []api.Relationship, error) {
-	source := getNodeRelationshipPath(n.Type(), n.ID(), api.Direction(where.Direction), where.Relation, where.TargetType, "", "")
+func (n Node) Relations(where *model.RelationWhere) (string, []api.Relation, error) {
+	source := getNodeRelationPath(n.Type(), n.ID(), api.Direction(where.Direction), where.Relation, where.TargetType, "", "")
 	// Iterate over 1000 items
 	var (
 		skipped int
 		skip    int
-		rels    []api.Relationship
+		rels    []api.Relation
 		err     error
 	)
 	if where.Cursor != nil {
@@ -264,16 +264,16 @@ func (n Node) Relationships(where *model.RelationWhere) (string, []api.Relations
 			}
 			item := it.Item()
 			split := strings.Split(string(item.Key()), ",")
-			var rel api.Relationship
-			cached, ok := n.db.cache.Get(string(getRelationshipPath(where.Relation, split[len(split)-1])))
+			var rel api.Relation
+			cached, ok := n.db.cache.Get(string(getRelationPath(where.Relation, split[len(split)-1])))
 			if ok {
-				rel = cached.(api.Relationship)
+				rel = cached.(api.Relation)
 			} else {
-				rel = &Relationship{
-					relationshipType: where.Relation,
-					relationshipID:   split[len(split)-1],
-					item:             nil,
-					db:               n.db,
+				rel = &Relation{
+					relationType: where.Relation,
+					relationID:   split[len(split)-1],
+					item:         nil,
+					db:           n.db,
 				}
 			}
 			passed := true

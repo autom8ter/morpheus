@@ -104,7 +104,7 @@ func (r *nodeResolver) SetProperties(ctx context.Context, obj *model.Node, prope
 	return true, nil
 }
 
-func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, relationship string, id string) (*model.Relationship, error) {
+func (r *nodeResolver) GetRelation(ctx context.Context, obj *model.Node, relation string, id string) (*model.Relation, error) {
 	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
@@ -114,7 +114,7 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, rel
 	if err != nil {
 		return nil, stacktrace.RootCause(stacktrace.Propagate(err, ""))
 	}
-	rel, ok, err := n.GetRelationship(relationship, id)
+	rel, ok, err := n.GetRelation(relation, id)
 	if err != nil {
 		logger.L.Error("graphql resolver error", stacktrace.Propagate(err, ""), map[string]interface{}{
 			"operation.name": op.OperationName,
@@ -126,7 +126,7 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, rel
 	if !ok {
 		return nil, stacktrace.RootCause(constants.ErrNotFound)
 	}
-	resp, err := toRelationship(rel)
+	resp, err := toRelation(rel)
 	if err != nil {
 		logger.L.Error("graphql resolver error", stacktrace.Propagate(err, ""), map[string]interface{}{
 			"operation.name": op.OperationName,
@@ -138,7 +138,7 @@ func (r *nodeResolver) GetRelationship(ctx context.Context, obj *model.Node, rel
 	return resp, nil
 }
 
-func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, direction *model.Direction, relationship string, properties map[string]interface{}, nodeKey model.Key) (*model.Relationship, error) {
+func (r *nodeResolver) AddRelation(ctx context.Context, obj *model.Node, direction *model.Direction, relation string, properties map[string]interface{}, nodeKey model.Key) (*model.Relation, error) {
 	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
@@ -157,10 +157,10 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, dir
 		Properties: properties,
 		Timestamp:  time.Now(),
 		Metadata: map[string]string{
-			"source.type":  obj.Type,
-			"source.id":    obj.ID,
-			"relationship": relationship,
-			"direction":    string(*direction),
+			"source.type": obj.Type,
+			"source.id":   obj.ID,
+			"relation":    relation,
+			"direction":   string(*direction),
 		},
 	}
 	val, err := r.applyCMD(cmd)
@@ -169,11 +169,11 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, dir
 			"operation.name": op.OperationName,
 			"node.type":      obj.Type,
 			"node.id":        obj.ID,
-			"relationship":   relationship,
+			"relation":       relation,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
-	rel, err := toRelationship(val.(api.Relationship))
+	rel, err := toRelation(val.(api.Relation))
 	if err != nil {
 		logger.L.Error("graphql resolver error", stacktrace.Propagate(err, ""), map[string]interface{}{
 			"operation.name": op.OperationName,
@@ -185,7 +185,7 @@ func (r *nodeResolver) AddRelationship(ctx context.Context, obj *model.Node, dir
 	return rel, nil
 }
 
-func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, key model.Key) (bool, error) {
+func (r *nodeResolver) DelRelation(ctx context.Context, obj *model.Node, key model.Key) (bool, error) {
 	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
@@ -212,7 +212,7 @@ func (r *nodeResolver) DelRelationship(ctx context.Context, obj *model.Node, key
 	return true, nil
 }
 
-func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where model.RelationWhere) (*model.Relationships, error) {
+func (r *nodeResolver) Relations(ctx context.Context, obj *model.Node, where model.RelationWhere) (*model.Relations, error) {
 	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
@@ -220,25 +220,25 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where
 	}
 	n, err := r.graph.GetNode(obj.Type, obj.ID)
 	if err != nil {
-		logger.L.Error("failed to list relationships", stacktrace.Propagate(err, ""), map[string]interface{}{
+		logger.L.Error("failed to list relations", stacktrace.Propagate(err, ""), map[string]interface{}{
 			"operation.name": op.OperationName,
 			"node.type":      obj.Type,
 			"node.id":        obj.ID,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
-	cursor, rels, err := n.Relationships(&where)
+	cursor, rels, err := n.Relations(&where)
 	if err != nil {
-		logger.L.Error("failed to list relationships", stacktrace.Propagate(err, ""), map[string]interface{}{
+		logger.L.Error("failed to list relations", stacktrace.Propagate(err, ""), map[string]interface{}{
 			"operation.name": op.OperationName,
 			"node.type":      obj.Type,
 			"node.id":        obj.ID,
 		})
 		return nil, stacktrace.RootCause(err)
 	}
-	var resp []*model.Relationship
+	var resp []*model.Relation
 	for _, rel := range rels {
-		i, err := toRelationship(rel)
+		i, err := toRelation(rel)
 		if err != nil {
 			logger.L.Error("graphql resolver error", stacktrace.Propagate(err, ""), map[string]interface{}{
 				"node.type":     obj.Type,
@@ -250,7 +250,7 @@ func (r *nodeResolver) Relationships(ctx context.Context, obj *model.Node, where
 		}
 		resp = append(resp, i)
 	}
-	return &model.Relationships{
+	return &model.Relations{
 		Cursor: cursor,
 		Values: resp,
 	}, nil
@@ -267,7 +267,7 @@ func (r *nodeResolver) AddIncomingNode(ctx context.Context, obj *model.Node, rel
 		return nil, stacktrace.RootCause(err)
 	}
 	direction := model.DirectionIncoming
-	if _, err := r.Node().AddRelationship(ctx, n, &direction, relation, properties, model.Key{
+	if _, err := r.Node().AddRelation(ctx, n, &direction, relation, properties, model.Key{
 		Type: obj.Type,
 		ID:   obj.ID,
 	}); err != nil {
@@ -287,7 +287,7 @@ func (r *nodeResolver) AddOutboundNode(ctx context.Context, obj *model.Node, rel
 		return nil, stacktrace.RootCause(err)
 	}
 	outgoing := model.DirectionOutgoing
-	if _, err := r.Node().AddRelationship(ctx, obj, &outgoing, relation, properties, model.Key{
+	if _, err := r.Node().AddRelation(ctx, obj, &outgoing, relation, properties, model.Key{
 		Type: n.Type,
 		ID:   n.ID,
 	}); err != nil {
@@ -296,15 +296,15 @@ func (r *nodeResolver) AddOutboundNode(ctx context.Context, obj *model.Node, rel
 	return n, nil
 }
 
-func (r *nodesResolver) Agg(ctx context.Context, obj *model.Nodes, agg model.Aggregate, field string) (float64, error) {
-	switch agg {
-	case model.AggregateSum:
+func (r *nodesResolver) Agg(ctx context.Context, obj *model.Nodes, fn model.AggregateFunction, field string) (float64, error) {
+	switch fn {
+	case model.AggregateFunctionSum:
 		sum := float64(0)
 		for _, n := range obj.Values {
 			sum += cast.ToFloat64(n.Properties[field])
 		}
 		return sum, nil
-	case model.AggregateCount:
+	case model.AggregateFunctionCount:
 		if field == "*" || field == "" {
 			return float64(len(obj.Values)), nil
 		}
@@ -317,7 +317,7 @@ func (r *nodesResolver) Agg(ctx context.Context, obj *model.Nodes, agg model.Agg
 		}
 		return float64(count), nil
 
-	case model.AggregateAvg:
+	case model.AggregateFunctionAvg:
 		sum := float64(0)
 		for _, n := range obj.Values {
 			sum += cast.ToFloat64(n.Properties[field])
@@ -326,7 +326,7 @@ func (r *nodesResolver) Agg(ctx context.Context, obj *model.Nodes, agg model.Agg
 			return 0, nil
 		}
 		return sum / float64(len(obj.Values)), nil
-	case model.AggregateMax:
+	case model.AggregateFunctionMax:
 		max := float64(0)
 		for _, n := range obj.Values {
 			if field := cast.ToFloat64(n.Properties[field]); field > max {
@@ -334,7 +334,7 @@ func (r *nodesResolver) Agg(ctx context.Context, obj *model.Nodes, agg model.Agg
 			}
 		}
 		return max, nil
-	case model.AggregateMin:
+	case model.AggregateFunctionMin:
 		if len(obj.Values) == 0 {
 			return 0, nil
 		}
@@ -353,7 +353,7 @@ func (r *queryResolver) Types(ctx context.Context) ([]string, error) {
 	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
-		logger.L.Error("failed to list relationships", stacktrace.Propagate(err, ""), map[string]interface{}{
+		logger.L.Error("failed to list relations", stacktrace.Propagate(err, ""), map[string]interface{}{
 			"operation.name": op.OperationName,
 		})
 		return nil, stacktrace.RootCause(err)
@@ -616,13 +616,13 @@ func (r *queryResolver) Login(ctx context.Context, username string, password str
 	return token, nil
 }
 
-func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error) {
+func (r *relationResolver) Properties(ctx context.Context, obj *model.Relation) (map[string]interface{}, error) {
 	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		return nil, stacktrace.RootCause(err)
 	}
-	n, err := r.graph.GetRelationship(obj.Type, obj.ID)
+	n, err := r.graph.GetRelation(obj.Type, obj.ID)
 	if err != nil {
 		logger.L.Error("graphql resolver error", stacktrace.Propagate(err, ""), map[string]interface{}{
 			"operation.name": op.OperationName,
@@ -643,13 +643,13 @@ func (r *relationshipResolver) Properties(ctx context.Context, obj *model.Relati
 	return props, nil
 }
 
-func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relationship, key string) (interface{}, error) {
+func (r *relationResolver) GetProperty(ctx context.Context, obj *model.Relation, key string) (interface{}, error) {
 	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
 	if err != nil {
 		return false, stacktrace.Propagate(err, "")
 	}
-	n, err := r.graph.GetRelationship(obj.Type, obj.ID)
+	n, err := r.graph.GetRelation(obj.Type, obj.ID)
 	if err != nil {
 		logger.L.Error("graphql resolver error", stacktrace.Propagate(err, ""), map[string]interface{}{
 			"operation.name": op.OperationName,
@@ -670,7 +670,7 @@ func (r *relationshipResolver) GetProperty(ctx context.Context, obj *model.Relat
 	return val, nil
 }
 
-func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Relationship, properties map[string]interface{}) (bool, error) {
+func (r *relationResolver) SetProperties(ctx context.Context, obj *model.Relation, properties map[string]interface{}) (bool, error) {
 	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.WRITER)
 	if err != nil {
@@ -698,7 +698,7 @@ func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Rel
 	return true, nil
 }
 
-func (r *relationshipsResolver) Agg(ctx context.Context, obj *model.Relationships, agg model.Aggregate, field string) (float64, error) {
+func (r *relationsResolver) Agg(ctx context.Context, obj *model.Relations, fn model.AggregateFunction, field string) (float64, error) {
 	if strings.Contains(field, "_target.") {
 		var values []*model.Node
 		for _, r := range obj.Values {
@@ -707,7 +707,7 @@ func (r *relationshipsResolver) Agg(ctx context.Context, obj *model.Relationship
 		return r.Nodes().Agg(ctx, &model.Nodes{
 			Cursor: "",
 			Values: values,
-		}, agg, strings.TrimPrefix(field, "_target."))
+		}, fn, strings.TrimPrefix(field, "_target."))
 	}
 	if strings.Contains(field, "_source.") {
 		var values []*model.Node
@@ -717,16 +717,16 @@ func (r *relationshipsResolver) Agg(ctx context.Context, obj *model.Relationship
 		return r.Nodes().Agg(ctx, &model.Nodes{
 			Cursor: "",
 			Values: values,
-		}, agg, strings.TrimPrefix(field, "_source."))
+		}, fn, strings.TrimPrefix(field, "_source."))
 	}
-	switch agg {
-	case model.AggregateSum:
+	switch fn {
+	case model.AggregateFunctionSum:
 		sum := float64(0)
 		for _, n := range obj.Values {
 			sum += cast.ToFloat64(n.Properties[field])
 		}
 		return sum, nil
-	case model.AggregateCount:
+	case model.AggregateFunctionCount:
 		if field == "*" || field == "" {
 			return float64(len(obj.Values)), nil
 		}
@@ -738,7 +738,7 @@ func (r *relationshipsResolver) Agg(ctx context.Context, obj *model.Relationship
 			}
 		}
 		return float64(count), nil
-	case model.AggregateAvg:
+	case model.AggregateFunctionAvg:
 		sum := float64(0)
 		for _, n := range obj.Values {
 			sum += cast.ToFloat64(n.Properties[field])
@@ -747,7 +747,7 @@ func (r *relationshipsResolver) Agg(ctx context.Context, obj *model.Relationship
 			return 0, nil
 		}
 		return sum / float64(len(obj.Values)), nil
-	case model.AggregateMax:
+	case model.AggregateFunctionMax:
 		max := float64(0)
 		for _, n := range obj.Values {
 			if field := cast.ToFloat64(n.Properties[field]); field > max {
@@ -755,7 +755,7 @@ func (r *relationshipsResolver) Agg(ctx context.Context, obj *model.Relationship
 			}
 		}
 		return max, nil
-	case model.AggregateMin:
+	case model.AggregateFunctionMin:
 		min := float64(0)
 		for _, n := range obj.Values {
 			if field := cast.ToFloat64(n.Properties[field]); field < min {
@@ -776,14 +776,14 @@ func (r *Resolver) Nodes() generated.NodesResolver { return &nodesResolver{r} }
 // Query returns generated.QueryResolver implementation.
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 
-// Relationship returns generated.RelationshipResolver implementation.
-func (r *Resolver) Relationship() generated.RelationshipResolver { return &relationshipResolver{r} }
+// Relation returns generated.RelationResolver implementation.
+func (r *Resolver) Relation() generated.RelationResolver { return &relationResolver{r} }
 
-// Relationships returns generated.RelationshipsResolver implementation.
-func (r *Resolver) Relationships() generated.RelationshipsResolver { return &relationshipsResolver{r} }
+// Relations returns generated.RelationsResolver implementation.
+func (r *Resolver) Relations() generated.RelationsResolver { return &relationsResolver{r} }
 
 type nodeResolver struct{ *Resolver }
 type nodesResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
-type relationshipResolver struct{ *Resolver }
-type relationshipsResolver struct{ *Resolver }
+type relationResolver struct{ *Resolver }
+type relationsResolver struct{ *Resolver }

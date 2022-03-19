@@ -77,15 +77,15 @@ type Node implements Entity {
     getProperty(key: String!): Any
     setProperties(properties: Map!): Boolean!
     delProperty(key: String!): Boolean!
-    getRelationship(relationship: String!, id: String!): Relationship!
-    addRelationship(direction: Direction, relationship: String!, properties: Map, nodeKey: Key!): Relationship!
-    delRelationship(key: Key!): Boolean!
-    relationships(where: RelationWhere!): Relationships!
+    getRelation(relation: String!, id: String!): Relation!
+    addRelation(direction: Direction, relation: String!, properties: Map, nodeKey: Key!): Relation!
+    delRelation(key: Key!): Boolean!
+    relations(where: RelationWhere!): Relations!
     addIncomingNode(relation: String!, properties: Map, addNode: AddNode!): Node!
     addOutboundNode(relation: String!, properties: Map, addNode: AddNode!): Node!
 }
 
-type Relationship implements Entity {
+type Relation implements Entity {
     id: String!
     type: String!
     properties: Map!
@@ -96,9 +96,9 @@ type Relationship implements Entity {
     target: Node!
 }
 
-type Relationships {
+type Relations {
     cursor: String!
-    values: [Relationship!]
+    values: [Relation!]
     agg(fn: AggregateFunction!, field: String!): Float!
 }
 

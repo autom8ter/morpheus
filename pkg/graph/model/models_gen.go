@@ -36,10 +36,10 @@ type Node struct {
 	GetProperty     interface{}            `json:"getProperty"`
 	SetProperties   bool                   `json:"setProperties"`
 	DelProperty     bool                   `json:"delProperty"`
-	GetRelationship *Relationship          `json:"getRelationship"`
-	AddRelationship *Relationship          `json:"addRelationship"`
-	DelRelationship bool                   `json:"delRelationship"`
-	Relationships   *Relationships         `json:"relationships"`
+	GetRelation     *Relation              `json:"getRelation"`
+	AddRelation     *Relation              `json:"addRelation"`
+	DelRelation     bool                   `json:"delRelation"`
+	Relations       *Relations             `json:"relations"`
 	AddIncomingNode *Node                  `json:"addIncomingNode"`
 	AddOutboundNode *Node                  `json:"addOutboundNode"`
 }
@@ -65,17 +65,7 @@ type OrderBy struct {
 	Reverse *bool  `json:"reverse"`
 }
 
-type RelationWhere struct {
-	Cursor      *string       `json:"cursor"`
-	Direction   Direction     `json:"direction"`
-	Relation    string        `json:"relation"`
-	TargetType  string        `json:"target_type"`
-	Expressions []*Expression `json:"expressions"`
-	PageSize    *int          `json:"page_size"`
-	OrderBy     *OrderBy      `json:"order_by"`
-}
-
-type Relationship struct {
+type Relation struct {
 	ID            string                 `json:"id"`
 	Type          string                 `json:"type"`
 	Properties    map[string]interface{} `json:"properties"`
@@ -86,12 +76,22 @@ type Relationship struct {
 	Target        *Node                  `json:"target"`
 }
 
-func (Relationship) IsEntity() {}
+func (Relation) IsEntity() {}
 
-type Relationships struct {
-	Cursor string          `json:"cursor"`
-	Values []*Relationship `json:"values"`
-	Agg    float64         `json:"agg"`
+type RelationWhere struct {
+	Cursor      *string       `json:"cursor"`
+	Direction   Direction     `json:"direction"`
+	Relation    string        `json:"relation"`
+	TargetType  string        `json:"target_type"`
+	Expressions []*Expression `json:"expressions"`
+	PageSize    *int          `json:"page_size"`
+	OrderBy     *OrderBy      `json:"order_by"`
+}
+
+type Relations struct {
+	Cursor string      `json:"cursor"`
+	Values []*Relation `json:"values"`
+	Agg    float64     `json:"agg"`
 }
 
 type SetNode struct {
@@ -100,50 +100,50 @@ type SetNode struct {
 	Properties map[string]interface{} `json:"properties"`
 }
 
-type Aggregate string
+type AggregateFunction string
 
 const (
-	AggregateSum   Aggregate = "SUM"
-	AggregateCount Aggregate = "COUNT"
-	AggregateAvg   Aggregate = "AVG"
-	AggregateMax   Aggregate = "MAX"
-	AggregateMin   Aggregate = "MIN"
+	AggregateFunctionSum   AggregateFunction = "SUM"
+	AggregateFunctionCount AggregateFunction = "COUNT"
+	AggregateFunctionAvg   AggregateFunction = "AVG"
+	AggregateFunctionMax   AggregateFunction = "MAX"
+	AggregateFunctionMin   AggregateFunction = "MIN"
 )
 
-var AllAggregate = []Aggregate{
-	AggregateSum,
-	AggregateCount,
-	AggregateAvg,
-	AggregateMax,
-	AggregateMin,
+var AllAggregateFunction = []AggregateFunction{
+	AggregateFunctionSum,
+	AggregateFunctionCount,
+	AggregateFunctionAvg,
+	AggregateFunctionMax,
+	AggregateFunctionMin,
 }
 
-func (e Aggregate) IsValid() bool {
+func (e AggregateFunction) IsValid() bool {
 	switch e {
-	case AggregateSum, AggregateCount, AggregateAvg, AggregateMax, AggregateMin:
+	case AggregateFunctionSum, AggregateFunctionCount, AggregateFunctionAvg, AggregateFunctionMax, AggregateFunctionMin:
 		return true
 	}
 	return false
 }
 
-func (e Aggregate) String() string {
+func (e AggregateFunction) String() string {
 	return string(e)
 }
 
-func (e *Aggregate) UnmarshalGQL(v interface{}) error {
+func (e *AggregateFunction) UnmarshalGQL(v interface{}) error {
 	str, ok := v.(string)
 	if !ok {
 		return fmt.Errorf("enums must be strings")
 	}
 
-	*e = Aggregate(str)
+	*e = AggregateFunction(str)
 	if !e.IsValid() {
-		return fmt.Errorf("%s is not a valid Aggregate", str)
+		return fmt.Errorf("%s is not a valid AggregateFunction", str)
 	}
 	return nil
 }
 
-func (e Aggregate) MarshalGQL(w io.Writer) {
+func (e AggregateFunction) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

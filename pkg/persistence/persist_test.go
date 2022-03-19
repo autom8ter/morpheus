@@ -25,16 +25,16 @@ import (
 //	if err != nil {
 //		t.Fatal(err)
 //	}
-//	coleman.AddRelationship("works_at", choozle)
+//	coleman.AddRelation("works_at", choozle)
 //
 //	found := false
-//	coleman.Relationships(0, "works_at", "business", func(relationship api.Relationship) bool {
+//	coleman.Relations(0, "works_at", "business", func(relation api.Relation) bool {
 //		found = true
-//		t.Logf("relationships - %s %s %s", coleman.GetProperty("name"), relationship.Type(), relationship.Target().ID())
+//		t.Logf("relations - %s %s %s", coleman.GetProperty("name"), relation.Type(), relation.Target().ID())
 //		return true
 //	})
 //	if !found {
-//		t.Fatal("failed to find relationship")
+//		t.Fatal("failed to find relation")
 //	}
 //
 //	{
@@ -81,11 +81,11 @@ Benchmark: 170589              7558 ns/op            3840 B/op         64 allocs
 //		if err != nil {
 //			b.Fatal(err)
 //		}
-//		coleman.AddRelationship(api.Outgoing, "works_at", "1", choozle)
-//		coleman.Relationships(0, api.Outgoing, "works_at", func(relationship api.Relationship) bool {
-//			relationship.Target().Relationships(0, api.Incoming, "works_at", func(relationship2 api.Relationship) bool {
-//				if relationship2.Source().GetProperty("name") != "Coleman Word" {
-//					b.Fatal("fail - ", relationship2.Target().ID(), relationship2.Source().ID())
+//		coleman.AddRelation(api.Outgoing, "works_at", "1", choozle)
+//		coleman.Relations(0, api.Outgoing, "works_at", func(relation api.Relation) bool {
+//			relation.Target().Relations(0, api.Incoming, "works_at", func(relation2 api.Relation) bool {
+//				if relation2.Source().GetProperty("name") != "Coleman Word" {
+//					b.Fatal("fail - ", relation2.Target().ID(), relation2.Source().ID())
 //				}
 //				return false
 //			})

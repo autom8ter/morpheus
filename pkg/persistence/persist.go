@@ -15,13 +15,13 @@ import (
 )
 
 type DB struct {
-	dir                  string
-	db                   *badger.DB
-	nodeTypes            sync.Map
-	nodeFieldMap         sync.Map
-	relationshipTypes    sync.Map
-	relationshipFieldMap sync.Map
-	cache                *ristretto.Cache
+	dir              string
+	db               *badger.DB
+	nodeTypes        sync.Map
+	nodeFieldMap     sync.Map
+	relationTypes    sync.Map
+	relationFieldMap sync.Map
+	cache            *ristretto.Cache
 }
 
 func New(dir string) (api.Graph, error) {
@@ -30,12 +30,12 @@ func New(dir string) (api.Graph, error) {
 		return nil, stacktrace.Propagate(err, "failed to create database storage")
 	}
 	d := &DB{
-		dir:                  dir,
-		db:                   db,
-		nodeTypes:            sync.Map{},
-		nodeFieldMap:         sync.Map{},
-		relationshipTypes:    sync.Map{},
-		relationshipFieldMap: sync.Map{},
+		dir:              dir,
+		db:               db,
+		nodeTypes:        sync.Map{},
+		nodeFieldMap:     sync.Map{},
+		relationTypes:    sync.Map{},
+		relationFieldMap: sync.Map{},
 	}
 	cache, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: 1e7,     // number of keys to track frequency of (10M).
@@ -113,8 +113,8 @@ func (d *DB) AddNode(nodeType, nodeID string, properties map[string]interface{})
 	}
 	d.nodeTypes.Store(nodeType, struct{}{})
 	key := getNodePath(nodeType, nodeID)
-	properties[ID] = nodeID
-	properties[Type] = nodeType
+	properties[Internal_ID] = nodeID
+	properties[Internal_Type] = nodeType
 	bits, err := encode.Marshal(properties)
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "")
@@ -261,14 +261,14 @@ func (d *DB) NodeTypes() []string {
 	return types
 }
 
-func (d *DB) GetRelationship(relation string, id string) (api.Relationship, error) {
-	r := &Relationship{
-		relationshipType: relation,
-		relationshipID:   id,
-		db:               d,
+func (d *DB) GetRelation(relation string, id string) (api.Relation, error) {
+	r := &Relation{
+		relationType: relation,
+		relationID:   id,
+		db:           d,
 	}
 	data := map[string]interface{}{}
-	key := getRelationshipPath(relation, id)
+	key := getRelationPath(relation, id)
 	if err := d.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
 		if err != nil {
@@ -291,7 +291,7 @@ func (d *DB) GetRelationship(relation string, id string) (api.Relationship, erro
 	return r, nil
 }
 
-func (d *DB) RangeRelationships(where *model.RelationWhere) (string, []api.Relationship, error) {
+func (d *DB) RangeRelations(where *model.RelationWhere) (string, []api.Relation, error) {
 	if where.PageSize == nil {
 		pageSize := prefetchSize
 		where.PageSize = &pageSize
@@ -300,7 +300,7 @@ func (d *DB) RangeRelationships(where *model.RelationWhere) (string, []api.Relat
 		err     error
 		skipped int
 		skip    int
-		rels    []api.Relationship
+		rels    []api.Relation
 	)
 
 	skip, err = parseCursor(*where.Cursor)
@@ -310,7 +310,7 @@ func (d *DB) RangeRelationships(where *model.RelationWhere) (string, []api.Relat
 
 	if err := d.db.View(func(txn *badger.Txn) error {
 
-		key := getRelationshipPath(where.Relation, "")
+		key := getRelationPath(where.Relation, "")
 
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchSize = prefetchSize
@@ -327,10 +327,10 @@ func (d *DB) RangeRelationships(where *model.RelationWhere) (string, []api.Relat
 			}
 			item := it.Item()
 			split := strings.Split(string(item.Key()), ",")
-			rel := &Relationship{
-				relationshipType: where.Relation,
-				relationshipID:   split[len(split)-1],
-				db:               d,
+			rel := &Relation{
+				relationType: where.Relation,
+				relationID:   split[len(split)-1],
+				db:           d,
 			}
 			data := map[string]interface{}{}
 			if err := item.Value(func(val []byte) error {
@@ -362,9 +362,9 @@ func (d *DB) RangeRelationships(where *model.RelationWhere) (string, []api.Relat
 	return createCursor(skip + skipped), rels, nil
 }
 
-func (d *DB) RelationshipTypes() []string {
+func (d *DB) RelationTypes() []string {
 	var types []string
-	d.relationshipTypes.Range(func(key, value interface{}) bool {
+	d.relationTypes.Range(func(key, value interface{}) bool {
 		types = append(types, key.(string))
 		return true
 	})
