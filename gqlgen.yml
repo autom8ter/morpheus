@@ -82,4 +82,12 @@ models:
         resolver: true
       setProperties:
         resolver: true
+  Nodes:
+    fields:
+      agg:
+        resolver: true
+  Relationships:
+    fields:
+      agg:
+        resolver: true
 

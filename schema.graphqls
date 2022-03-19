@@ -91,11 +91,13 @@ type Relationship implements Entity {
 type Relationships {
     cursor: String!
     values: [Relationship!]
+    agg(agg: Aggregate!, field: String!): Float!
 }
 
 type Nodes {
     cursor: String!
     values: [Node!]
+    agg(agg: Aggregate!, field: String!): Float!
 }
 
 input AddNode {
@@ -122,7 +124,7 @@ type Query {
     types: [String!]
     get(key: Key!): Node!
     list(where: NodeWhere!): Nodes!
-    agg(agg: Aggregate!, field: String!, where: NodeWhere!): Float!
+
 
     add(add: AddNode!): Node!
     set(set: SetNode!): Node!

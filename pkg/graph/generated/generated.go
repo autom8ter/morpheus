@@ -37,8 +37,10 @@ type Config struct {
 
 type ResolverRoot interface {
 	Node() NodeResolver
+	Nodes() NodesResolver
 	Query() QueryResolver
 	Relationship() RelationshipResolver
+	Relationships() RelationshipsResolver
 }
 
 type DirectiveRoot struct {
@@ -61,13 +63,13 @@ type ComplexityRoot struct {
 	}
 
 	Nodes struct {
+		Agg    func(childComplexity int, agg model.Aggregate, field string) int
 		Cursor func(childComplexity int) int
 		Values func(childComplexity int) int
 	}
 
 	Query struct {
 		Add     func(childComplexity int, add model.AddNode) int
-		Agg     func(childComplexity int, agg model.Aggregate, field string, where model.NodeWhere) int
 		BulkAdd func(childComplexity int, add []*model.AddNode) int
 		BulkDel func(childComplexity int, del []*model.Key) int
 		BulkSet func(childComplexity int, set []*model.SetNode) int
@@ -91,6 +93,7 @@ type ComplexityRoot struct {
 	}
 
 	Relationships struct {
+		Agg    func(childComplexity int, agg model.Aggregate, field string) int
 		Cursor func(childComplexity int) int
 		Values func(childComplexity int) int
 	}
@@ -108,11 +111,13 @@ type NodeResolver interface {
 	AddIncomingNode(ctx context.Context, obj *model.Node, relation string, properties map[string]interface{}, addNode model.AddNode) (*model.Node, error)
 	AddOutboundNode(ctx context.Context, obj *model.Node, relation string, properties map[string]interface{}, addNode model.AddNode) (*model.Node, error)
 }
+type NodesResolver interface {
+	Agg(ctx context.Context, obj *model.Nodes, agg model.Aggregate, field string) (float64, error)
+}
 type QueryResolver interface {
 	Types(ctx context.Context) ([]string, error)
 	Get(ctx context.Context, key model.Key) (*model.Node, error)
 	List(ctx context.Context, where model.NodeWhere) (*model.Nodes, error)
-	Agg(ctx context.Context, agg model.Aggregate, field string, where model.NodeWhere) (float64, error)
 	Add(ctx context.Context, add model.AddNode) (*model.Node, error)
 	Set(ctx context.Context, set model.SetNode) (*model.Node, error)
 	Del(ctx context.Context, del model.Key) (bool, error)
@@ -125,6 +130,9 @@ type RelationshipResolver interface {
 	Properties(ctx context.Context, obj *model.Relationship) (map[string]interface{}, error)
 	GetProperty(ctx context.Context, obj *model.Relationship, key string) (interface{}, error)
 	SetProperties(ctx context.Context, obj *model.Relationship, properties map[string]interface{}) (bool, error)
+}
+type RelationshipsResolver interface {
+	Agg(ctx context.Context, obj *model.Relationships, agg model.Aggregate, field string) (float64, error)
 }
 
 type executableSchema struct {
@@ -271,6 +279,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Node.Type(childComplexity), true
 
+	case "Nodes.agg":
+		if e.complexity.Nodes.Agg == nil {
+			break
+		}
+
+		args, err := ec.field_Nodes_agg_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Nodes.Agg(childComplexity, args["agg"].(model.Aggregate), args["field"].(string)), true
+
 	case "Nodes.cursor":
 		if e.complexity.Nodes.Cursor == nil {
 			break
@@ -296,18 +316,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.Add(childComplexity, args["add"].(model.AddNode)), true
-
-	case "Query.agg":
-		if e.complexity.Query.Agg == nil {
-			break
-		}
-
-		args, err := ec.field_Query_agg_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Query.Agg(childComplexity, args["agg"].(model.Aggregate), args["field"].(string), args["where"].(model.NodeWhere)), true
 
 	case "Query.bulkAdd":
 		if e.complexity.Query.BulkAdd == nil {
@@ -483,6 +491,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Relationship.Type(childComplexity), true
 
+	case "Relationships.agg":
+		if e.complexity.Relationships.Agg == nil {
+			break
+		}
+
+		args, err := ec.field_Relationships_agg_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Relationships.Agg(childComplexity, args["agg"].(model.Aggregate), args["field"].(string)), true
+
 	case "Relationships.cursor":
 		if e.complexity.Relationships.Cursor == nil {
 			break
@@ -640,11 +660,13 @@ type Relationship implements Entity {
 type Relationships {
     cursor: String!
     values: [Relationship!]
+    agg(agg: Aggregate!, field: String!): Float!
 }
 
 type Nodes {
     cursor: String!
     values: [Node!]
+    agg(agg: Aggregate!, field: String!): Float!
 }
 
 input AddNode {
@@ -671,7 +693,7 @@ type Query {
     types: [String!]
     get(key: Key!): Node!
     list(where: NodeWhere!): Nodes!
-    agg(agg: Aggregate!, field: String!, where: NodeWhere!): Float!
+
 
     add(add: AddNode!): Node!
     set(set: SetNode!): Node!
@@ -898,6 +920,30 @@ func (ec *executionContext) field_Node_setProperties_args(ctx context.Context, r
 	return args, nil
 }
 
+func (ec *executionContext) field_Nodes_agg_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.Aggregate
+	if tmp, ok := rawArgs["agg"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("agg"))
+		arg0, err = ec.unmarshalNAggregate2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAggregate(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["agg"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["field"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("field"))
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["field"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -925,39 +971,6 @@ func (ec *executionContext) field_Query_add_args(ctx context.Context, rawArgs ma
 		}
 	}
 	args["add"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_agg_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 model.Aggregate
-	if tmp, ok := rawArgs["agg"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("agg"))
-		arg0, err = ec.unmarshalNAggregate2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAggregate(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["agg"] = arg0
-	var arg1 string
-	if tmp, ok := rawArgs["field"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("field"))
-		arg1, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["field"] = arg1
-	var arg2 model.NodeWhere
-	if tmp, ok := rawArgs["where"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("where"))
-		arg2, err = ec.unmarshalNNodeWhere2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodeWhere(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["where"] = arg2
 	return args, nil
 }
 
@@ -1132,6 +1145,30 @@ func (ec *executionContext) field_Relationship_setProperties_args(ctx context.Co
 		}
 	}
 	args["properties"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Relationships_agg_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.Aggregate
+	if tmp, ok := rawArgs["agg"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("agg"))
+		arg0, err = ec.unmarshalNAggregate2githubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐAggregate(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["agg"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["field"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("field"))
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["field"] = arg1
 	return args, nil
 }
 
@@ -1720,6 +1757,48 @@ func (ec *executionContext) _Nodes_values(ctx context.Context, field graphql.Col
 	return ec.marshalONode2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodeᚄ(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _Nodes_agg(ctx context.Context, field graphql.CollectedField, obj *model.Nodes) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Nodes",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Nodes_agg_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Nodes().Agg(rctx, obj, args["agg"].(model.Aggregate), args["field"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Query_types(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -1834,48 +1913,6 @@ func (ec *executionContext) _Query_list(ctx context.Context, field graphql.Colle
 	res := resTmp.(*model.Nodes)
 	fc.Result = res
 	return ec.marshalNNodes2ᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐNodes(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_agg(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Query_agg_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Agg(rctx, args["agg"].(model.Aggregate), args["field"].(string), args["where"].(model.NodeWhere))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(float64)
-	fc.Result = res
-	return ec.marshalNFloat2float64(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_add(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -2606,6 +2643,48 @@ func (ec *executionContext) _Relationships_values(ctx context.Context, field gra
 	res := resTmp.([]*model.Relationship)
 	fc.Result = res
 	return ec.marshalORelationship2ᚕᚖgithubᚗcomᚋautom8terᚋmorpheusᚋpkgᚋgraphᚋmodelᚐRelationshipᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Relationships_agg(ctx context.Context, field graphql.CollectedField, obj *model.Relationships) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Relationships",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   true,
+		IsResolver: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Relationships_agg_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Relationships().Agg(rctx, obj, args["agg"].(model.Aggregate), args["field"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
@@ -4376,7 +4455,7 @@ func (ec *executionContext) _Nodes(ctx context.Context, sel ast.SelectionSet, ob
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "values":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -4385,6 +4464,26 @@ func (ec *executionContext) _Nodes(ctx context.Context, sel ast.SelectionSet, ob
 
 			out.Values[i] = innerFunc(ctx)
 
+		case "agg":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Nodes_agg(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -4468,29 +4567,6 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_list(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
-			}
-
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
-		case "agg":
-			field := field
-
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_agg(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -4836,7 +4912,7 @@ func (ec *executionContext) _Relationships(ctx context.Context, sel ast.Selectio
 			out.Values[i] = innerFunc(ctx)
 
 			if out.Values[i] == graphql.Null {
-				invalids++
+				atomic.AddUint32(&invalids, 1)
 			}
 		case "values":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
@@ -4845,6 +4921,26 @@ func (ec *executionContext) _Relationships(ctx context.Context, sel ast.Selectio
 
 			out.Values[i] = innerFunc(ctx)
 
+		case "agg":
+			field := field
+
+			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Relationships_agg(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			}
+
+			out.Concurrently(i, func() graphql.Marshaler {
+				return innerFunc(ctx)
+
+			})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}

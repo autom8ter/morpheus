@@ -57,6 +57,7 @@ type NodeWhere struct {
 type Nodes struct {
 	Cursor string  `json:"cursor"`
 	Values []*Node `json:"values"`
+	Agg    float64 `json:"agg"`
 }
 
 type OrderBy struct {
@@ -90,6 +91,7 @@ func (Relationship) IsEntity() {}
 type Relationships struct {
 	Cursor string          `json:"cursor"`
 	Values []*Relationship `json:"values"`
+	Agg    float64         `json:"agg"`
 }
 
 type SetNode struct {

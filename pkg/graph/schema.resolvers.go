@@ -6,6 +6,7 @@ package graph
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -295,6 +296,48 @@ func (r *nodeResolver) AddOutboundNode(ctx context.Context, obj *model.Node, rel
 	return n, nil
 }
 
+func (r *nodesResolver) Agg(ctx context.Context, obj *model.Nodes, agg model.Aggregate, field string) (float64, error) {
+	switch agg {
+	case model.AggregateSum:
+		sum := float64(0)
+		for _, n := range obj.Values {
+			sum += cast.ToFloat64(n.Properties[field])
+		}
+		return sum, nil
+	case model.AggregateCount:
+		return float64(len(obj.Values)), nil
+	case model.AggregateAvg:
+		sum := float64(0)
+		for _, n := range obj.Values {
+			sum += cast.ToFloat64(n.Properties[field])
+		}
+		if sum == 0 {
+			return 0, nil
+		}
+		return sum / float64(len(obj.Values)), nil
+	case model.AggregateMax:
+		max := float64(0)
+		for _, n := range obj.Values {
+			if field := cast.ToFloat64(n.Properties[field]); field > max {
+				max = field
+			}
+		}
+		return max, nil
+	case model.AggregateMin:
+		if len(obj.Values) == 0 {
+			return 0, nil
+		}
+		min := cast.ToFloat64(obj.Values[0].Properties[field])
+		for _, n := range obj.Values {
+			if field := cast.ToFloat64(n.Properties[field]); field < min {
+				min = field
+			}
+		}
+		return min, nil
+	}
+	return 0, nil
+}
+
 func (r *queryResolver) Types(ctx context.Context) ([]string, error) {
 	op := graphql.GetOperationContext(ctx)
 	_, err := r.mw.RequireRole(ctx, config.READER)
@@ -363,65 +406,6 @@ func (r *queryResolver) List(ctx context.Context, where model.NodeWhere) (*model
 		resp.Values = append(resp.Values, n)
 	}
 	return resp, nil
-}
-
-func (r *queryResolver) Agg(ctx context.Context, agg model.Aggregate, field string, where model.NodeWhere) (float64, error) {
-	switch agg {
-	case model.AggregateSum:
-		nodes, err := r.List(ctx, where)
-		if err != nil {
-			return 0, err
-		}
-		sum := float64(0)
-		for _, n := range nodes.Values {
-			sum += cast.ToFloat64(n.Properties[field])
-		}
-		return sum, nil
-	case model.AggregateCount:
-		nodes, err := r.List(ctx, where)
-		if err != nil {
-			return 0, err
-		}
-		return float64(len(nodes.Values)), nil
-	case model.AggregateAvg:
-		nodes, err := r.List(ctx, where)
-		if err != nil {
-			return 0, err
-		}
-		sum := float64(0)
-		for _, n := range nodes.Values {
-			sum += cast.ToFloat64(n.Properties[field])
-		}
-		if sum == 0 {
-			return 0, nil
-		}
-		return sum / float64(len(nodes.Values)), nil
-	case model.AggregateMax:
-		nodes, err := r.List(ctx, where)
-		if err != nil {
-			return 0, err
-		}
-		max := float64(0)
-		for _, n := range nodes.Values {
-			if field := cast.ToFloat64(n.Properties[field]); field > max {
-				max = field
-			}
-		}
-		return max, nil
-	case model.AggregateMin:
-		nodes, err := r.List(ctx, where)
-		if err != nil {
-			return 0, err
-		}
-		min := float64(0)
-		for _, n := range nodes.Values {
-			if field := cast.ToFloat64(n.Properties[field]); field < min {
-				min = field
-			}
-		}
-		return min, nil
-	}
-	return 0, nil
 }
 
 func (r *queryResolver) Add(ctx context.Context, add model.AddNode) (*model.Node, error) {
@@ -703,8 +687,70 @@ func (r *relationshipResolver) SetProperties(ctx context.Context, obj *model.Rel
 	return true, nil
 }
 
+func (r *relationshipsResolver) Agg(ctx context.Context, obj *model.Relationships, agg model.Aggregate, field string) (float64, error) {
+	if strings.Contains(field, "_target.") {
+		var values []*model.Node
+		for _, r := range obj.Values {
+			values = append(values, r.Target)
+		}
+		return r.Nodes().Agg(ctx, &model.Nodes{
+			Cursor: "",
+			Values: values,
+		}, agg, strings.TrimPrefix(field, "_target."))
+	}
+	if strings.Contains(field, "_source.") {
+		var values []*model.Node
+		for _, r := range obj.Values {
+			values = append(values, r.Target)
+		}
+		return r.Nodes().Agg(ctx, &model.Nodes{
+			Cursor: "",
+			Values: values,
+		}, agg, strings.TrimPrefix(field, "_source."))
+	}
+	switch agg {
+	case model.AggregateSum:
+		sum := float64(0)
+		for _, n := range obj.Values {
+			sum += cast.ToFloat64(n.Properties[field])
+		}
+		return sum, nil
+	case model.AggregateCount:
+		return float64(len(obj.Values)), nil
+	case model.AggregateAvg:
+		sum := float64(0)
+		for _, n := range obj.Values {
+			sum += cast.ToFloat64(n.Properties[field])
+		}
+		if sum == 0 {
+			return 0, nil
+		}
+		return sum / float64(len(obj.Values)), nil
+	case model.AggregateMax:
+		max := float64(0)
+		for _, n := range obj.Values {
+			if field := cast.ToFloat64(n.Properties[field]); field > max {
+				max = field
+			}
+		}
+		return max, nil
+	case model.AggregateMin:
+		min := float64(0)
+		for _, n := range obj.Values {
+			if field := cast.ToFloat64(n.Properties[field]); field < min {
+				min = field
+			}
+		}
+		return min, nil
+	}
+	return 0, nil
+}
+
 // Node returns generated.NodeResolver implementation.
 func (r *Resolver) Node() generated.NodeResolver { return &nodeResolver{r} }
+
+// Nodes returns generated.NodesResolver implementation.
+func (r *Resolver) Nodes() generated.NodesResolver { return &nodesResolver{r} }
 
 // Query returns generated.QueryResolver implementation.
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
@@ -712,6 +758,11 @@ func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 // Relationship returns generated.RelationshipResolver implementation.
 func (r *Resolver) Relationship() generated.RelationshipResolver { return &relationshipResolver{r} }
 
+// Relationships returns generated.RelationshipsResolver implementation.
+func (r *Resolver) Relationships() generated.RelationshipsResolver { return &relationshipsResolver{r} }
+
 type nodeResolver struct{ *Resolver }
+type nodesResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type relationshipResolver struct{ *Resolver }
+type relationshipsResolver struct{ *Resolver }
